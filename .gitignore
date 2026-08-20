@@ -6,3 +6,9 @@ package-lock.json
 DEBUG-*
 /.yarn
 /.vscode
+.DS_Store
+/releases/
+/captures/*.pcap
+/captures/*.png
+/captures/*.jpg
+/captures/*.jpeg
