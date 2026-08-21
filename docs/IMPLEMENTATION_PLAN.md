@@ -1,37 +1,26 @@
-# Implementation plan
+# Public-beta plan
 
-## Delivered in v0.1
+## Release gates
 
-- Current Companion API 2/Node 22 repository and native MIDI packaging.
-- Legacy codec with verified published discovery packet, checksum and tests.
-- Product capability profiles and normalized state model.
-- USB/RTP MIDI endpoint selection, discovery, liveness and automatic refresh.
-- PlayAUDIO12 failover/host health, scene recall, snapshot list, save and output meters.
-- Actions, variables, feedbacks and starter presets.
+1. Rebuild actions, feedbacks and presets from detected capabilities; reject unsupported operations with device-level messages.
+2. Add focused tests for capability surfaces, module lifecycle, configuration upgrades, reconnect/backoff and multiple instances.
+3. Fix responder identity/configuration discovery or label responder mode MIDI-only/experimental.
+4. Limit public device/platform claims to hardware-validated combinations; document 64-bit native-addon support.
+5. Run multi-day PlayAUDIO1U + two-mioXM testing across device, Companion and network restarts, Auracle coexistence and high MIDI/Clock load.
+6. Load packaged builds on Raspberry Pi ARM64, macOS Apple Silicon and Windows x64; exercise USB MIDI on at least one platform.
+7. Remove or sanitize private captures/configuration exports, run Bitfocus shared checks and publish a tagged beta with release notes.
 
-## Milestone 2 - TNG foundation
+## Later capability slices
 
-- TNG framing/parser, BAx2/14x2/16x3/28x4/32x5 codecs and session state machine.
-- Product IDs 14-17 detection; definition cache and notification manager.
-- PlayAUDIO1U failover arm/alarm, USB host status, explicit active scene, presets and meters.
-- mioXL/XM port inventory, routes, filters/remaps, USB host reservations and RTP session status.
+- TNG definition cache and notification subscriptions.
+- PlayAUDIO1U failover/host health, meters and safe audio controls.
+- mioXM/mioXL port inventory, routing, filters/remaps, USB host reservations and RTP session state.
+- Legacy routing, RTP detail, preset navigation and validated PlayAUDIO12 controls.
+- Typed edge events for online state, failover, Scene, preset and RTP-session transitions.
+- Optional exact Bonjour service-name resolution with manual IP/port retained.
 
-## Milestone 3 - full public control surface
+## Explicitly excluded
 
-- Legacy + TNG MIDI route editor actions and route feedback/variables.
-- RTP initiator/responder configuration, peer identity and connection health.
-- Audio output level/mute, headphone mix and global mute where supported.
-- Preset/scene names, active IDs, save/load, next/previous and safe backup export/import.
-- Control ports, automation mapping and MIDI panic.
-- Edge-triggered Companion custom variables/triggers for failover, sessions and device health.
-
-## Milestone 4 - hardware validation
-
-Use one unit from each protocol/family: PlayAUDIO12, PlayAUDIO1U, mioXL or mioXM, and one legacy mio. Capture request/response fixtures without proprietary Auracle traffic reverse engineering. Validate firmware variations, command-definition omissions, port IDs, save semantics, alarm transitions, meter rate limits, disconnect/reconnect, multiple identical devices, macOS/Windows/Linux and Companion package loading.
-
-## Explicitly deferred
-
-- Firmware update, bootloader, factory reset and shutdown (destructive).
-- PlayAUDIO1U audio-protection control/status until the public field mapping is verified on hardware.
-- Direct AppleMIDI session implementation; Companion uses OS MIDI endpoints.
-- Any Auracle-only behavior lacking a published protocol field.
+- Firmware update, bootloader, factory reset, shutdown and reboot-required writes.
+- Audio-protection control/status until a public field mapping is confirmed on hardware.
+- Auracle-only behavior without a documented protocol field.

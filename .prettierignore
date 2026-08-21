@@ -1,2 +1,8 @@
-package.json
-/LICENSE.md
+node_modules/
+dist/
+pkg/
+releases/
+captures/
+coverage/
+*.tgz
+LICENSE

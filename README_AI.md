@@ -2,35 +2,36 @@
 
 ## Purpose
 
-This repository is a Bitfocus Companion module for iConnectivity PlayAUDIO and mio-family MIDI/audio interfaces. It discovers devices, selects USB or RTP-MIDI transport, exposes Companion actions/feedbacks/variables/presets, and sends documented legacy SysEx or partial TNG messages.
+Bitfocus Companion module for monitoring and controlling iConnectivity PlayAUDIO and mio-family interfaces. The currently hardware-validated path is Companion on Raspberry Pi ARM64 connecting as an AppleMIDI/RTP-MIDI initiator to PlayAUDIO1U and mioXM devices over Ethernet.
 
 ## Architecture
 
-- `src/main.ts` owns the Companion module lifecycle, discovery, normalized state, transport selection, and public module wiring.
-- `src/config.ts`, `src/actions.ts`, `src/feedbacks.ts`, `src/variables.ts`, `src/presets.ts`, and `src/upgrades.ts` define the Companion surface.
-- `src/midi.ts` and `src/network/apple-midi.ts` provide native MIDI and AppleMIDI/RTP-MIDI transport.
-- `src/protocol/legacy.ts` is the implemented legacy Rev. 26 codec; `src/protocol/tng.ts` is the TNG codec/message foundation used for discovery and selected reads.
-- `src/devices.ts` contains product IDs and capability profiles. Device responses and command/parameter definitions are authoritative; model names are not.
-- `tests/` contains Node test-runner coverage for transports, codecs, device behavior, and public module behavior.
+- `src/main.ts` owns lifecycle, transport selection, discovery, normalized state and reconnect behavior.
+- `src/network/apple-midi.ts` is the authoritative pure-Node AppleMIDI/RTP-MIDI transport.
+- `src/midi.ts` provides optional local USB MIDI through the native `@julusian/midi` addon.
+- `src/protocol/legacy.ts` is the production legacy SysEx codec.
+- `src/protocol/tng.ts` implements TNG framing, identity and selected preset/scene reads; it is not a complete TNG control surface.
+- `src/devices.ts` contains provisional capability profiles. Public protocol responses/definitions are authoritative; profile names alone are not permission to send a command.
+- Companion actions, feedbacks, variables, presets and configuration are defined in the corresponding `src/*.ts` files.
+- Tests are under `tests/`; user help and store metadata are under `companion/`; durable research is under `docs/`.
 
-## Important files and directories
+## External interfaces
 
-- `AGENTS.md` — operating rules and verification commands for AI agents.
-- `STATUS.md` — current work state and next actions.
-- `docs/` — durable protocol research, sources, capability matrix, and implementation plan; start with `docs/README.md`.
-- `companion/` — Companion manifest and user-facing help.
-- `captures/` — local investigative captures; large captures are ignored, while the companion reference JSON remains visible.
-- `dist/`, `pkg/`, root `*.tgz`, and `releases/` — generated/package artifacts, not source of truth.
+- Bitfocus Companion module API 2 on Node 22.
+- AppleMIDI/RTP-MIDI over UDP for Ethernet sessions.
+- `@julusian/midi` for local USB MIDI; packaged builds require approved native addons and supported prebuilds.
+- iConnectivity legacy Rev. 26 and TNG SysEx specifications listed in `docs/SOURCES.md`.
 
-## External services and APIs
+## Confirmed decisions
 
-The module targets Bitfocus Companion API 2 and uses `@companion-module/base`. MIDI I/O uses `@julusian/midi`; network MIDI uses the AppleMIDI/RTP-MIDI protocol over UDP. Protocol behavior is based on the iConnectivity Rev. 26 and TNG specifications listed in `docs/SOURCES.md`.
+- Network mode is self-contained and does not require `rtpmidid`, ALSA network-MIDI setup or Apple Network MIDI.
+- Companion is normally the RTP initiator. Each instance owns independent local UDP port pairs and reconnects after either endpoint restarts.
+- The normal user RTP session remains connected for MIDI and liveness. On TNG devices, the configuration session on 5002/5003 is opened briefly for identity and initial preset/scene reads, then released for Auracle.
+- Preset and PlayAUDIO Scene recalls use one-based MIDI Program Change values on channels configured beforehand with iConnectivity Preset Selector.
+- Incoming MIDI Clock is separated and rate-limited so it cannot overwhelm Companion trigger variables.
+- Device state must be normalized before actions, variables or feedbacks consume it. Unsupported controls must be hidden or rejected clearly.
+- Destructive operations, firmware updates, factory reset and reboot-required writes are excluded.
 
-## Confirmed decisions and constraints
+## Current boundary
 
-- Node 22 and Yarn 4 are required.
-- SysEx over an operating-system MIDI endpoint is the primary control path. Do not add a second AppleMIDI session implementation inside the device protocol without a deliberate design decision.
-- Legacy and TNG are different wire protocols; do not share framing or assume legacy commands work on TNG devices.
-- Capability detection must follow device responses/definitions.
-- Factory reset, firmware update, bootloader, shutdown, and reboot-requiring configuration writes are intentionally excluded.
-- Preset/scene recall depends on channels configured and saved with iConnectivity Preset Selector; the module does not change that routing.
+PlayAUDIO1U and mioXM identity, online state, user MIDI, preset state/recall and PlayAUDIO1U Scene state/recall have been exercised on hardware. Full TNG routing, failover, meters, audio controls, notifications and RTP configuration are unfinished. PlayAUDIO12, mioXL, legacy mio, USB MIDI, responder mode and non-Linux platforms require release-level hardware validation. See `STATUS.md` first, then `docs/CAPABILITY_MATRIX.md` only when capability scope matters.

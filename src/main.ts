@@ -42,6 +42,10 @@ import {
 	type TngMessage,
 } from './protocol/tng.js'
 
+// Companion rate-limits variable publication, not MIDI transport traffic. Clock
+// pulses are tracked on every input but exposed at a deliberately lower rate.
+export const MIDI_CLOCK_PUBLISH_INTERVAL_MS = 250
+
 export type ModuleSchema = {
 	config: ModuleConfig
 	secrets: undefined
@@ -153,6 +157,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 	private readonly midiMessageQueue: number[][] = []
 	private processingMidiMessage = false
 	private lastMidiDropWarningAt = 0
+	private lastMidiInputStateSignature = ''
 
 	async init(config: ModuleConfig): Promise<void> {
 		this.config = config
@@ -170,6 +175,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		this.midiOutPublishTimer = undefined
 		this.midiMessageQueue.length = 0
 		this.processingMidiMessage = false
+		this.lastMidiInputStateSignature = ''
 		for (const timer of this.noteReleaseTimers) clearTimeout(timer)
 		this.noteReleaseTimers.clear()
 		this.closeTransport()
@@ -201,6 +207,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		this.midiOutPublishTimer = undefined
 		this.midiMessageQueue.length = 0
 		this.processingMidiMessage = false
+		this.lastMidiInputStateSignature = ''
 		this.configRetryAt = 0
 		this.closeTransport()
 		this.state.online = false
@@ -404,7 +411,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		this.midiClockPublishTimer = setTimeout(() => {
 			this.midiClockPublishTimer = undefined
 			this.publishMidiClockState()
-		}, 100)
+		}, MIDI_CLOCK_PUBLISH_INTERVAL_MS)
 	}
 
 	private publishMidiClockState(): void {
@@ -420,6 +427,32 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 	private publishMidiInputState(): void {
 		const details = this.state.midiIn
 		const generic = genericMidiCompatibility(details)
+		const signature = [
+			details.type,
+			details.channel,
+			details.number,
+			details.value,
+			details.noteName,
+			details.raw,
+			details.summary,
+			generic.lastMessage,
+			generic.lastNote,
+			generic.lastChannel,
+			generic.lastMsgType,
+			generic.lastValue,
+		].join('|')
+		if (signature === this.lastMidiInputStateSignature) {
+			// Keep the compatibility trigger prompt without republishing unchanged
+			// descriptive state for repeated identical MIDI messages.
+			this.setVariableValues({
+				midi_in_count: this.state.midiInCount,
+				midi_in_dropped_count: this.state.midiInDroppedCount,
+				midi_in_queue_depth: this.midiMessageQueue.length,
+				midiIn: true,
+			})
+			return
+		}
+		this.lastMidiInputStateSignature = signature
 		const values: Record<string, string | number | boolean> = {
 			midi_in_count: this.state.midiInCount,
 			midi_in_dropped_count: this.state.midiInDroppedCount,

@@ -1,29 +1,29 @@
 # Capability matrix
 
-Legend: **V1** implemented; **D** publicly documented and planned; **R** requires hardware interoperability validation; **N/A** not applicable; **No public field** not found in the public specifications.
+Legend: **H** hardware-validated locally; **I** implemented but needs release validation; **P** publicly documented/planned; **N/A** not applicable. An action is not public-ready until both implemented and capability-gated.
 
-| Capability                    | PlayAUDIO12 (PID 11, legacy)              | PlayAUDIO1U (PID 17, TNG)                                                                       | mioXL/XM (PID 14/15, TNG)         | mio10/mio4/mio2/mio (legacy)   |
-| ----------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------- | --------------------------------- | ------------------------------ |
-| Discovery/identity/firmware   | **V1**                                    | **D** session + DeviceInfo                                                                      | **D** session + DeviceInfo        | **V1**                         |
-| Online/liveness               | **V1** polling                            | **D** session/notifications                                                                     | **D** session/notifications       | **V1** polling                 |
-| MIDI port inventory/names     | **D**                                     | **D**                                                                                           | **D**                             | **D**                          |
-| MIDI routing                  | **D** route bitmaps                       | **D** MIDIPortInfo                                                                              | **D** MIDIPortInfo                | **D** route bitmaps            |
-| MIDI filters/remap/AMP        | **D**                                     | **D**                                                                                           | **D**                             | **D**, device dependent        |
-| USB host presence/reservation | **D** hosted-device detail                | **D** HardwareInfo                                                                              | **D** HardwareInfo                | **D**, host-equipped models    |
-| RTP-MIDI sessions/state       | **D** connection detail/parameters        | **D**                                                                                           | **D**                             | **D** mio10/mio4; N/A mio2/mio |
-| IP/MAC/Bonjour                | **D** EthernetPortInfo                    | **D** HardwareInfo                                                                              | **D** HardwareInfo                | device dependent               |
-| Preset read/load/save/names   | **D**, save has hardware caveat           | **D**                                                                                           | **D** (up to device-reported max) | **D**                          |
-| Scene A/B state/control       | **V1** recall; active inferred from alarm | **D** explicit SceneNumber                                                                      | N/A                               | N/A                            |
-| Failover arm/alarm/control    | **V1**                                    | **D** DeviceFeature 0x10/0x11                                                                   | N/A                               | N/A                            |
-| Host A/B audio + MIDI health  | **V1** status 0-3                         | **D** FailoverUSBPortStatus                                                                     | N/A                               | N/A                            |
-| Output level/mute             | **D** audio/mixer control                 | **D** AudioChannelInfo/automation                                                               | N/A                               | N/A                            |
-| Audio meters                  | **V1** configurable output port           | **D** audio channel metering fields                                                             | N/A                               | N/A                            |
-| Audio protection              | N/A                                       | **R** user-visible and TNG system events; exact public status/control mapping must be confirmed | N/A                               | N/A                            |
-| Control/footswitch ports      | **D**, limited hardware semantics         | **D** read/write/actions                                                                        | N/A                               | device dependent               |
-| MIDI activity                 | **R** infer from port monitor/traffic     | **D/R** monitor notifications                                                                   | **D/R** monitor notifications     | **R**                          |
+| Capability                          | PlayAUDIO1U (TNG)           | mioXM (TNG)                 | PlayAUDIO12 (legacy)        | Other advertised devices           |
+| ----------------------------------- | --------------------------- | --------------------------- | --------------------------- | ---------------------------------- |
+| Ethernet RTP initiator + reconnect  | **H**                       | **H**                       | **I**                       | **I**                              |
+| RTP responder                       | **I**, discovery incomplete | **I**, discovery incomplete | **I**, discovery incomplete | **I**, discovery incomplete        |
+| USB MIDI transport                  | **I**                       | **I**                       | **I**                       | **I**                              |
+| Identity/name/serial/firmware       | **H**                       | **H**                       | **I**                       | **I** legacy; mioXL TNG **I**      |
+| Online/user-session health          | **H**                       | **H**                       | **I**                       | **I**                              |
+| User MIDI send/receive + triggers   | **H**                       | **H**                       | **I**                       | **I**                              |
+| MIDI Clock receive/BPM              | **H** transport path        | **H** transport path        | **I**                       | **I**                              |
+| Active preset/name initial read     | **H**                       | **H**                       | **P**                       | mioXL **I**; legacy **P**          |
+| Preset recall by Program Change     | **H**                       | **H**                       | **I**                       | **I** when device is preconfigured |
+| Active Scene initial read           | **H**                       | N/A                         | **P**                       | N/A                                |
+| Scene A/B Program Change recall     | **H**                       | N/A                         | **I**                       | N/A                                |
+| Failover/host health                | **P**                       | N/A                         | **I**                       | N/A                                |
+| Audio meters                        | **P**                       | N/A                         | **I**                       | device dependent                   |
+| Output level/mute                   | **P**                       | N/A                         | **P**                       | device dependent                   |
+| MIDI port inventory/routing         | **P**                       | **P**                       | **P**                       | **P**, device dependent            |
+| RTP session inventory/configuration | **P**                       | **P**                       | **P**                       | device dependent                   |
+| Audio protection                    | research only               | N/A                         | N/A                         | N/A                                |
 
-## Important boundary
+## Boundaries
 
-Auracle X supports level, mute, stereo/mono, headphone mix, pan, solo, failover settings, routing, filter/remap, presets, RTP-MIDI, USB host reservation and control ports. Most are represented publicly, but exact capability is returned by each device/firmware. The module must probe definitions/command lists and never assume every field exists on every product.
-
-Audio protection is marketed and displayed by PlayAUDIO1U, but the public TNG document does not label a single universal `AudioProtectionStatus` parameter. Implement only after mapping the relevant AudioInfo/system-event flags on real hardware; until then it is research, not promised support.
+- Current `src/devices.ts` profiles are provisional and overstate some PlayAUDIO1U failover/meter capabilities exposed by the Companion surface. Device definitions must gate future TNG controls.
+- Auracle behavior shows useful product features but is not proof of a public control field. Use the specifications in `SOURCES.md` and hardware responses.
+- PlayAUDIO1U audio protection has no confirmed single public status/control mapping; do not promise or implement it without documented hardware evidence.

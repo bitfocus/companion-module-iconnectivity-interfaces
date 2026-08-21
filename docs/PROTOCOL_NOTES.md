@@ -1,45 +1,37 @@
 # Protocol notes
 
-## Captured initial operational state queries
+## Transport
 
-Auracle X traffic captured against mioXM and PlayAUDIO1U confirms these TNG reads:
+Network mode uses the pure-Node implementation in `src/network/apple-midi.ts` to negotiate AppleMIDI/RTP-MIDI directly over UDP. It supports initiator/responder session mechanics, independent local port pairs, synchronization/liveness and reconnect. No operating-system network-MIDI daemon is required. Local USB mode uses `@julusian/midi` and packaged native prebuilds.
+
+The user RTP session carries ordinary MIDI and remains connected. TNG identity/state uses a second initiator session to the device configuration port (normally 5002/5003); the module releases it after initial reads so Auracle can connect.
+
+Preset and Scene control is not a configuration-session write. It uses Program Change on channels saved in the device with Preset Selector: displayed preset/Scene numbers are one-based, while MIDI data bytes are zero-based.
+
+## Captured TNG initial reads
+
+Hardware captures against mioXM and PlayAUDIO1U confirm:
 
 - Data class `0x03`, parameter `0x01`: active preset number.
 - Data class `0x03`, indexed parameter `0x02`: preset name.
-- Data class `0x08`, indexed parameter `0x41`: active PlayAUDIO1U scene (`1` = A, `2` = B).
+- Data class `0x08`, indexed parameter `0x41`: active PlayAUDIO1U Scene (`1` = A, `2` = B).
 
-The module issues these reads once during discovery and then closes its configuration RTP-MIDI session. They are not polled continuously.
+These are read once during discovery, not continuously polled. Later module actions and matching Program Change traffic update cached state.
 
-## Transport decision
+## Legacy (`F0 00 01 73 7E`)
 
-SysEx over an operating-system MIDI endpoint is the primary control transport. It works over direct USB MIDI and over an already-established RTP-MIDI session. The module should not implement AppleMIDI session negotiation inside Companion: the device protocol's RTP settings configure sessions, while the actual MIDI transport is provided by CoreMIDI/Windows rtpMIDI/ALSA.
+- Address: 14-bit product ID and 32-bit serial encoded in five 7-bit bytes.
+- Transaction: 14 bits; responses echo it.
+- Command: query/write flag at bit 13 plus 10-bit command ID.
+- Checksum: 7-bit two's complement of the body.
+- Discovery: zero PID/serial wildcards with command `0x01`.
+- The returned command list is the authoritative capability source.
+- Failover uses hardware type 3 through `0x84/0x85` and includes arm, alarm and four host-health values.
+- Audio meters use `0x3E`; 8192 is 0 dBFS.
+- Snapshot/Scene commands occupy `0x66-0x6E`; Scene type is 127. These legacy configuration commands must not be assumed valid on TNG products.
 
-`@julusian/midi` was selected because Bitfocus's maintained Generic MIDI module uses it, it has Node 22 support, and Companion packaging can include its native prebuilds.
+## TNG (`F0 00 01 73 7D`)
 
-## Legacy (header `F0 00 01 73 7E`)
+TNG is not legacy-compatible. It adds sessions, 28-bit transactions, message/data classes, typed blocks, parameter definitions and notifications. The current production foundation implements framing, session identity and selected preset/Scene reads. Future controls must first query definitions, then use returned access/capability data rather than product-name assumptions.
 
-- Device ID: 14-bit product ID plus 32-bit serial encoded in five 7-bit bytes.
-- 14-bit transaction ID; responses echo it.
-- Command field: query/write flag at bit 13 plus 10-bit command ID.
-- Checksum: 7-bit two's complement of all body bytes.
-- Discovery uses PID/SNUM zero wildcards and command `0x01`.
-- A device command list is the authoritative capability source.
-- Failover value is hardware type 3 via `GetHardwareValue 0x84` / return-write `0x85`. It provides ARM, ALARM and four USB host health values.
-- Meter values use `GetAudioPortMeterValue 0x3E`; 8192 is 0 dBFS and `20 log10(value/8192)` converts readings.
-- Snapshots/scenes use `0x66-0x6E`; scene type is 127.
-
-## TNG (header `F0 00 01 73 7D`)
-
-TNG is not wire-compatible with legacy. It adds host/device session IDs, 28-bit transactions, message/data classes, typed data blocks, parameter definitions and notifications. Required adapter sequence:
-
-1. Establish host session and cache returned session/device information.
-2. Query parameter and command definitions; use definitions as capability detection.
-3. Read constant parameters once, dynamic/read-write parameters on refresh, and register notification subscriptions for live state.
-4. Map state by data class and argument set, including area/preset/scene IDs.
-5. Use grouped writes only when atomic behavior is required, then honor ACK error detail.
-
-Key TNG public fields include active preset/scene, failover arm/alarm and four USB-port status bytes, MIDI port routes/features, Ethernet/RTP fields, audio channel controls, meters, automation, system events, preset save/load, backup/restore and MIDI panic.
-
-## Subscription architecture
-
-The state store is transport-independent. Protocol adapters normalize replies/notifications into device state; Companion variables and feedbacks read only normalized state. Polling is the fallback. TNG notifications should replace high-frequency polling; legacy meters and failover remain rate-limited polls. Triggers will be emitted only on edge transitions (online/offline, alarm, active scene/host, session connection, protection event).
+Planned normalization flow: protocol response or notification → normalized device state → Companion variables/feedbacks/triggers. TNG notifications should replace high-rate polling; legacy polling remains rate-limited.

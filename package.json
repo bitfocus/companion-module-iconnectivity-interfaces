@@ -1,6 +1,6 @@
 {
 	"name": "iconnectivity",
-	"version": "0.13.3",
+	"version": "0.13.9",
 	"main": "dist/main.js",
 	"type": "module",
 	"scripts": {

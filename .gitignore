@@ -1,14 +1,33 @@
-node_modules/
+# Dependencies and package-manager caches
+/node_modules/
+/.yarn/
 package-lock.json
-/pkg
-/*.tgz
-/dist
-DEBUG-*
-/.yarn
-/.vscode
-.DS_Store
+
+# Generated builds, packages and reports
+/dist/
+/pkg/
 /releases/
-/captures/*.pcap
-/captures/*.png
-/captures/*.jpg
-/captures/*.jpeg
+/*.tgz
+/coverage/
+*.tsbuildinfo
+
+# Private investigative artifacts; sanitized fixtures belong in tests/fixtures/
+/captures/
+*.pcap
+*.pcapng
+
+# Logs, caches, backups and temporary files
+*.log
+DEBUG-*
+.cache/
+.eslintcache
+*.bak
+*.tmp
+*.swp
+*~
+
+# Editor and operating-system files
+/.vscode/
+/.idea/
+.DS_Store
+Thumbs.db
