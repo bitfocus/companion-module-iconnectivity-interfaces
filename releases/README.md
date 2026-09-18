@@ -1,0 +1,42 @@
+# Release procedure and archive inventory
+
+`releases/` is the only retained location for packaged, testable module builds. Archives are generated artifacts, never source or implementation input.
+
+## Release states
+
+- **Production** is the single most recent build explicitly confirmed stable through real hardware/production testing. It remains Production until the user explicitly approves a newer Candidate's promotion.
+- **Candidate** is the newest packaged build intended for testing. It may have fixes or features that have not received enough real-world validation for Production.
+
+`STATUS.md` is the current state record: it must list Production and Candidate separately, with version, date, validation status, and the Candidate's remaining test scope. If evidence does not establish a state, say so rather than guessing.
+
+## Versioning and archive names
+
+Use the existing normal incremental module version scheme. Every testable package receives a new, unique version. Never reuse a version, overwrite an archive, or silently replace its contents—even when testing fails or a package is discarded.
+
+New archives must be placed directly in this directory and named exactly:
+
+```text
+iconnectivity-interfaces-vX.Y.Z-PRODUCTION.tgz
+iconnectivity-interfaces-vX.Y.Z-CANDIDATE.tgz
+```
+
+On promotion, keep the Candidate archive and add a separately named Production archive. Do not delete older archives unless explicitly instructed.
+
+## Current evidence and legacy inventory
+
+- Production: **0.13.3.** The user explicitly confirmed it as the real-hardware/production-stable baseline on 2026-08-23 (the retained legacy archive was created 2026-08-21). It remains Production unless the user explicitly approves a Candidate promotion.
+- Candidate: **0.14.13** (2026-09-03), archived as `iconnectivity-interfaces-v0.14.13-CANDIDATE.tgz`. It adds an explicit interface-model setting so capability-gated controls remain available for offline Companion editing. Auto-detect remains the default for existing configurations. A configured/detected model mismatch reports a configuration error and blocks model-specific commands and polling. It retains the 0.14.12 mixer snapshot work and the hardware-validated 0.14.11 preset/Scene feedback. It was packaged and verified under Node 22.20.0/Yarn 4.17.0; all 38 automated tests passed. It requires PA1U validation of offline editing across module/Companion restarts, normal recalls after the interface powers up, deliberate model-mismatch protection, and the outstanding 0.14.12 mixer snapshot/notification scope.
+- Prior Candidate: **0.14.12** (2026-08-27), archived as `iconnectivity-interfaces-v0.14.12-CANDIDATE.tgz`. It adds an optional PA1U mixer snapshot MIDI channel, one-based recall action, current snapshot variable and feedback, Program Change tracking, and live AudioPortInfo:MixerSnapshotNumber notification parsing. Mixer snapshot state remains unknown until observed because an authoritative initial read requires mixer-port discovery. It retains the hardware-validated 0.14.11 preset/Scene feedback and graceful AppleMIDI shutdown. It was packaged and verified under Node 22.20.0/Yarn 4.17.0; all 36 automated tests passed. It requires PA1U validation of snapshot recall, live notification, feedback highlighting, preset-reset behavior, and the device's supported snapshot range.
+- Prior Candidate: **0.14.11** (2026-08-27), archived as `iconnectivity-interfaces-v0.14.11-CANDIDATE.tgz`. It fixes PA1U live Scene feedback by parsing the documented DeviceFeature:SceneNumber notification (`0x04`) in addition to the captured one-time Scene reply shape. It retains 0.14.10 graceful AppleMIDI shutdown and visible configuration warnings. It was packaged and verified under Node 22.20.0/Yarn 4.17.0; all 33 automated tests passed. PA1U identity startup and live device-originated preset and Scene A/B feedback were confirmed on real hardware on 2026-08-27.
+- Prior Candidate: **0.14.10** (2026-08-27), archived as `iconnectivity-interfaces-v0.14.10-CANDIDATE.tgz`. It preserves 0.14.6 live TNG preset/Scene notifications and adds graceful AppleMIDI end-session packets on both control and data channels so module reloads do not leave the device configuration endpoint occupied until timeout. Configuration-session rejection and timeout are now visible as warnings. It was packaged and verified under Node 22.20.0/Yarn 4.17.0; all 32 automated tests passed, including graceful shutdown, immediate peer disconnect and loopback restart recovery.
+- Prior Candidate: **0.14.6** (2026-08-27), archived as `iconnectivity-interfaces-v0.14.6-CANDIDATE.tgz`. It adds optional immediate TNG preset and Scene feedback using documented device notifications and keepalive pings. The setting is disabled by default and warns that retaining the configuration session may prevent concurrent Auracle access. It was packaged and verified under Node 22.20.0/Yarn 4.17.0; all 30 automated tests passed, including loopback UDP integration outside the sandbox. It requires PA1U and mioXM hardware validation of front-panel changes, preset-name refresh, notification keepalive, reconnect behavior, and Auracle contention.
+- Prior Candidate: **0.14.5** (2026-08-25), archived as `iconnectivity-interfaces-v0.14.5-CANDIDATE.tgz`. It adds concise configuration tooltips, shorter labels, the Preset Selector documentation link, and a 5060 default for new responder configurations. It was packaged and verified under Node 22.20.0/Yarn 4.17.0; all 28 automated tests passed, including loopback UDP integration outside the sandbox. It remains pending PA1U real-hardware and multi-day production validation.
+- Failed build attempt: **0.14.7** (2026-08-27) failed its graceful AppleMIDI shutdown integration test before packaging. No Candidate archive was created and the version must not be reused.
+- Failed build attempt: **0.14.8** (2026-08-27) passed graceful shutdown but retained an obsolete integration expectation for ungraceful peer timeout. No Candidate archive was created and the version must not be reused.
+- Failed build attempt: **0.14.9** (2026-08-27) passed all 32 tests but failed lint on two formatting-only issues before packaging. No Candidate archive was created and the version must not be reused.
+- Prior Candidate: **0.14.4** (2026-08-24), archived as `iconnectivity-interfaces-v0.14.4-CANDIDATE.tgz`. It simplifies the conditional settings layout, moves MIDI Clock into MIDI options, and gives responder mode a required fixed Companion RTP-MIDI port with an upgrade migration. It was packaged and verified under Node 22.20.0/Yarn 4.17.0; all 28 automated tests passed, including loopback UDP integration outside the sandbox. It remains pending PA1U real-hardware and multi-day production validation.
+- Prior Candidate: **0.14.3** (2026-08-24), archived as `iconnectivity-interfaces-v0.14.3-CANDIDATE.tgz`. This frozen-surface reliability build prevents stale configuration-session callbacks/timers from affecting a newer connection, rejects unrelated RTP peers, and explicitly enforces Node 22.20+/Yarn 4 before build, test, lint, or packaging. It was packaged and verified under Node 22.20.0/Yarn 4.17.0; all 27 automated tests passed, with the two loopback UDP integration tests run outside the sandbox. It remains pending PA1U real-hardware and multi-day production validation.
+- Retained non-qualified Candidate attempt: **0.14.2** (2026-08-24), archived as `iconnectivity-interfaces-v0.14.2-CANDIDATE.tgz`. It was built before the runtime guard was corrected, under Node 24.19.0 rather than the required Node 22.20.x. Do not use it as a release candidate.
+- Prior Candidate: **0.14.1** (2026-08-23), archived as `iconnectivity-interfaces-v0.14.1-CANDIDATE.tgz`. Its automated release checks passed under Node 22.20/Yarn 4.17; it remains retained as history and was not promoted.
+- Legacy archives `iconnectivity-interfaces-0.1.0.tgz` through `iconnectivity-interfaces-0.13.9.tgz` predate this policy; their state is unknown and their names are retained as history.
+- A version-number conflict exists for 0.14.0: `iconnectivity-interfaces-0.14.0.tgz` and `iconnectivity-interfaces-0.14.0-verified.tgz` are nonidentical archives. They are retained untouched for investigation, but neither filename conforms to this policy and the second must not be treated as a replacement for the first.

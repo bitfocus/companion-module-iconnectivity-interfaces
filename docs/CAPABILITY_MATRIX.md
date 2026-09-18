@@ -14,6 +14,8 @@ Legend: **H** hardware-validated locally; **I** implemented but needs release va
 | Active preset/name initial read     | **H**                       | **H**                       | **P**                       | mioXL **I**; legacy **P**          |
 | Preset recall by Program Change     | **H**                       | **H**                       | **I**                       | **I** when device is preconfigured |
 | Active Scene initial read           | **H**                       | N/A                         | **P**                       | N/A                                |
+| Live preset/Scene notifications     | **H**                       | **I** preset only           | N/A                         | mioXL **I** preset only            |
+| Mixer snapshot recall/notification  | **I**                       | N/A                         | **P**                       | device dependent                   |
 | Scene A/B Program Change recall     | **H**                       | N/A                         | **I**                       | N/A                                |
 | Failover/host health                | **P**                       | N/A                         | **I**                       | N/A                                |
 | Audio meters                        | **P**                       | N/A                         | **I**                       | device dependent                   |
@@ -24,6 +26,6 @@ Legend: **H** hardware-validated locally; **I** implemented but needs release va
 
 ## Boundaries
 
-- Current `src/devices.ts` profiles are provisional and overstate some PlayAUDIO1U failover/meter capabilities exposed by the Companion surface. Device definitions must gate future TNG controls.
+- Current `src/devices.ts` profiles are provisional but intentionally conservative: unverified PlayAUDIO1U failover and meter controls are not exposed. Device definitions must gate future TNG controls.
 - Auracle behavior shows useful product features but is not proof of a public control field. Use the specifications in `SOURCES.md` and hardware responses.
 - PlayAUDIO1U audio protection has no confirmed single public status/control mapping; do not promise or implement it without documented hardware evidence.

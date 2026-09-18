@@ -19,10 +19,15 @@ export function GetVariableDefinitions(
 		hardware_version: { name: 'Hardware version' },
 		identity_status: { name: 'Identity discovery status' },
 		detected_capabilities: { name: 'Detected device capabilities' },
+		rtp_peer_address: { name: 'RTP-MIDI peer address' },
+		rtp_reconnect_attempts: { name: 'RTP-MIDI reconnect attempts since last connection' },
+		rtp_last_disconnect_reason: { name: 'RTP-MIDI last disconnect reason' },
+		rtp_last_connected_timestamp: { name: 'RTP-MIDI last successful connection time' },
 		supports_audio: { name: 'Supports audio controls' },
 		supports_failover: { name: 'Supports failover' },
 		supports_metering: { name: 'Supports audio metering' },
 		supports_scenes: { name: 'Supports scenes' },
+		supports_mixer_snapshots: { name: 'Supports mixer snapshots' },
 		supports_midi_routing: { name: 'Supports MIDI routing' },
 		supports_rtp_midi: { name: 'Supports RTP-MIDI' },
 		last_ack: { name: 'Last command acknowledgement' },
@@ -52,7 +57,7 @@ export function GetVariableDefinitions(
 		midi_out_raw: { name: 'MIDI out: raw bytes' },
 		midi_out_summary: { name: 'MIDI out: summary' },
 		midi_out_timestamp: { name: 'MIDI out: timestamp' },
-		last_recall_timestamp: { name: 'Last observed scene/preset recall timestamp' },
+		last_recall_timestamp: { name: 'Last observed preset/Scene/mixer snapshot recall timestamp' },
 		last_midi_in: { name: 'Last user MIDI in (legacy raw-byte alias)' },
 		last_midi_out: { name: 'Last user MIDI out (legacy raw-byte alias)' },
 		device_command_out_count: { name: 'Internal device commands sent' },
@@ -71,6 +76,8 @@ export function GetVariableDefinitions(
 		definitions.current_preset_name = { name: 'Current preset name (observed/cached)' }
 	}
 	if (profile?.scenes) definitions.current_scene = { name: 'Current Scene A/B (observed/cached)' }
+	if (profile?.mixerSnapshots)
+		definitions.current_mixer_snapshot = { name: 'Current mixer snapshot number (observed/cached)' }
 	if (profile?.failover) {
 		definitions.failover_armed = { name: 'Failover armed' }
 		definitions.failover_alarm = { name: 'Failover alarm' }

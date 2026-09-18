@@ -20,6 +20,8 @@ export interface AppleMidiStatus {
 	peerName: string
 	peerAddress: string
 	lastSeen: number
+	reconnectAttempts: number
+	lastDisconnectReason: string
 }
 
 export function safeAppleMidiName(name: string): string {
@@ -53,6 +55,16 @@ export function invitationPacket(command: number, token: number, ssrc: number, n
 	packet.writeUInt32BE(token, 8)
 	packet.writeUInt32BE(ssrc, 12)
 	label.copy(packet, 16)
+	return packet
+}
+
+export function endSessionPacket(token: number, ssrc: number): Buffer {
+	const packet = Buffer.alloc(16)
+	packet.writeUInt16BE(SIGNATURE, 0)
+	packet.writeUInt16BE(COMMAND.end, 2)
+	packet.writeUInt32BE(2, 4)
+	packet.writeUInt32BE(token, 8)
+	packet.writeUInt32BE(ssrc, 12)
 	return packet
 }
 
@@ -108,8 +120,17 @@ export class AppleMidiSession extends EventEmitter {
 	private sequence = uint32() & 0xffff
 	private controlReady = false
 	private dataReady = false
+	private peerControl?: RemoteInfo
 	private peerData?: RemoteInfo
-	private status: AppleMidiStatus = { connected: false, peerName: '', peerAddress: '', lastSeen: 0 }
+	private peerToken?: number
+	private status: AppleMidiStatus = {
+		connected: false,
+		peerName: '',
+		peerAddress: '',
+		lastSeen: 0,
+		reconnectAttempts: 0,
+		lastDisconnectReason: '',
+	}
 	constructor(private readonly options: AppleMidiOptions) {
 		super()
 	}
@@ -124,16 +145,21 @@ export class AppleMidiSession extends EventEmitter {
 	close(): void {
 		if (this.timer) clearInterval(this.timer)
 		this.timer = undefined
-		this.control?.close()
-		this.data?.close()
+		const control = this.control
+		const data = this.data
+		const peerControl = this.peerControl
+		const peerData = this.peerData
+		const end = this.status.connected ? endSessionPacket(this.peerToken ?? this.token, this.ssrc) : undefined
 		this.control = undefined
 		this.data = undefined
-		this.setConnected(false)
+		this.resetPeer('Session closed')
+		this.endAndCloseSocket(control, peerControl, end)
+		this.endAndCloseSocket(data, peerData, end)
 	}
 	send(midi: readonly number[]): void {
 		if (!this.status.connected || !this.data || !this.peerData) throw new Error('RTP-MIDI session is not connected')
 		const packet = rtpMidiPacket(this.sequence++, Math.floor(performance.now() * 10), this.ssrc, midi)
-		this.data.send(packet, this.peerData.port, this.peerData.address)
+		this.sendDatagram(this.data, packet, this.peerData.port, this.peerData.address)
 	}
 	getStatus(): AppleMidiStatus {
 		return { ...this.status }
@@ -162,6 +188,8 @@ export class AppleMidiSession extends EventEmitter {
 				this.data = data
 				control.on('message', (packet, peer) => this.onControl(packet, peer, false))
 				data.on('message', (packet, peer) => this.onControl(packet, peer, true))
+				control.on('error', (error) => this.handleSocketError(error))
+				data.on('error', (error) => this.handleSocketError(error))
 				return
 			} catch (error) {
 				control.close()
@@ -172,40 +200,45 @@ export class AppleMidiSession extends EventEmitter {
 	}
 	private maintain(): void {
 		if (this.options.role === 'initiator' && !this.status.connected) {
+			this.status.reconnectAttempts++
+			this.emit('status', this.getStatus())
 			const invite = invitationPacket(COMMAND.invitation, this.token, this.ssrc, this.options.sessionName)
-			this.control?.send(invite, this.options.remotePort, this.options.remoteHost)
-			this.data?.send(invite, this.options.remotePort + 1, this.options.remoteHost)
+			this.sendDatagram(this.control, invite, this.options.remotePort, this.options.remoteHost)
+			this.sendDatagram(this.data, invite, this.options.remotePort + 1, this.options.remoteHost)
 		} else if (this.status.connected && Date.now() - this.status.lastSeen > APPLE_MIDI_SESSION_TIMEOUT_MS) {
-			this.controlReady = false
-			this.dataReady = false
-			this.setConnected(false)
+			this.resetPeer('Peer stopped responding')
 		} else if (this.status.connected) this.sendSync(0)
 	}
 	private onControl(packet: Buffer, peer: RemoteInfo, isData: boolean): void {
+		if (!this.isAllowedPeer(peer)) return
 		const invitation = parseInvitation(packet)
 		if (invitation) {
 			this.status.lastSeen = Date.now()
 			this.status.peerName = invitation.name
 			this.status.peerAddress = peer.address
 			if (invitation.command === COMMAND.invitation && this.options.role === 'responder') {
+				this.peerToken = invitation.token
 				const response = invitationPacket(COMMAND.accepted, invitation.token, this.ssrc, this.options.sessionName)
-				;(isData ? this.data : this.control)?.send(response, peer.port, peer.address)
+				this.sendDatagram(isData ? this.data : this.control, response, peer.port, peer.address)
 				if (isData) {
 					this.peerData = peer
 					this.dataReady = true
 				} else {
+					this.peerControl = peer
 					this.controlReady = true
 				}
 			} else if (invitation.command === COMMAND.accepted && invitation.token === this.token) {
+				this.peerToken = invitation.token
 				if (isData) {
 					this.peerData = peer
 					this.dataReady = true
 				} else {
+					this.peerControl = peer
 					this.controlReady = true
 				}
 			} else if (invitation.command === COMMAND.end || invitation.command === COMMAND.rejected) {
-				this.controlReady = false
-				this.dataReady = false
+				this.resetPeer(invitation.command === COMMAND.end ? 'Peer ended the session' : 'Peer rejected the session')
+				return
 			}
 			this.setConnected(this.controlReady && this.dataReady)
 			return
@@ -221,6 +254,13 @@ export class AppleMidiSession extends EventEmitter {
 			this.emit('status', this.getStatus())
 		}
 	}
+	private isAllowedPeer(peer: RemoteInfo): boolean {
+		// An initiator is configured with a direct IPv4 address. Do not let a
+		// delayed response from another host, or an unrelated packet, replace the
+		// established peer and keep a dead session alive.
+		if (this.options.role === 'initiator') return peer.address === this.options.remoteHost
+		return !this.status.connected || !this.status.peerAddress || peer.address === this.status.peerAddress
+	}
 	private sendSync(count: number, source?: Buffer, peer = this.peerData): void {
 		if (!this.data || !peer) return
 		const packet = Buffer.alloc(36)
@@ -232,7 +272,7 @@ export class AppleMidiSession extends EventEmitter {
 		if (count === 0) writeU64(packet, 12, nowTicks())
 		else if (count === 1) writeU64(packet, 20, nowTicks())
 		else writeU64(packet, 28, nowTicks())
-		this.data.send(packet, peer.port, peer.address)
+		this.sendDatagram(this.data, packet, peer.port, peer.address)
 	}
 	private handleSync(packet: Buffer, peer: RemoteInfo): void {
 		if (packet.length < 36) return
@@ -242,10 +282,48 @@ export class AppleMidiSession extends EventEmitter {
 		else if (count === 1 && this.options.role === 'initiator') this.sendSync(2, packet, peer)
 		this.emit('status', this.getStatus())
 	}
-	private setConnected(connected: boolean): void {
-		if (this.status.connected === connected) return
+	private sendDatagram(socket: Socket | undefined, packet: Buffer, port: number, host: string): void {
+		if (!socket) return
+		socket.send(packet, port, host, (error) => {
+			if (error) this.handleSocketError(error)
+		})
+	}
+	private endAndCloseSocket(
+		socket: Socket | undefined,
+		peer: RemoteInfo | undefined,
+		packet: Buffer | undefined,
+	): void {
+		if (!socket) return
+		if (!peer || !packet) {
+			socket.close()
+			return
+		}
+		socket.send(packet, peer.port, peer.address, () => socket.close())
+	}
+	private handleSocketError(error: Error): void {
+		this.resetPeer(`UDP socket error: ${error.message}`)
+	}
+	private resetPeer(reason: string): void {
+		this.controlReady = false
+		this.dataReady = false
+		this.peerControl = undefined
+		this.peerData = undefined
+		this.peerToken = undefined
+		this.setConnected(false, reason)
+	}
+	private setConnected(connected: boolean, disconnectReason = ''): void {
+		const changed = this.status.connected !== connected
+		if (!connected && disconnectReason) this.status.lastDisconnectReason = disconnectReason
+		if (!changed) {
+			if (disconnectReason) this.emit('status', this.getStatus())
+			return
+		}
 		this.status.connected = connected
-		if (connected) this.status.lastSeen = Date.now()
+		if (connected) {
+			this.status.lastSeen = Date.now()
+			this.status.reconnectAttempts = 0
+			this.status.lastDisconnectReason = ''
+		}
 		this.emit('status', this.getStatus())
 	}
 }

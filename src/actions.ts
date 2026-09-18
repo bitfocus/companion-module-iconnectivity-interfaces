@@ -1,4 +1,5 @@
 import type ModuleInstance from './main.js'
+import type { CompanionActionDefinitions } from '@companion-module/base'
 import { parseMidiBytes, programChangeBytes } from './midi-message.js'
 
 export type ActionsSchema = {
@@ -28,64 +29,73 @@ export type ActionsSchema = {
 	send_sysex: { options: { data: string } }
 	recall_preset: { options: { preset: number } }
 	recall_scene: { options: { scene: string } }
+	recall_mixer_snapshot: { options: { snapshot: number } }
 }
 
 export function UpdateActions(self: ModuleInstance): void {
-	self.setActionDefinitions({
+	const definitions: Partial<CompanionActionDefinitions<ActionsSchema>> = {
 		discover: { name: 'Discover device', options: [], callback: async () => self.discover() },
 		refresh: { name: 'Refresh all supported state', options: [], callback: async () => self.requestRefresh() },
-		failover_arm: { name: 'Failover: Arm', options: [], callback: async () => self.setFailover(true) },
-		failover_disarm: { name: 'Failover: Disarm', options: [], callback: async () => self.setFailover(false) },
-		failover_clear: {
-			name: 'Failover: Clear alarm',
-			options: [],
-			callback: async () => self.setFailover(self.state.failoverArmed, true),
-		},
-		apply_snapshot: {
-			name: 'Legacy/configuration: Apply snapshot or scene',
-			options: [
-				{
-					type: 'dropdown',
-					id: 'type',
-					label: 'Type',
-					default: 127,
-					choices: [
-						{ id: 1, label: 'MIDI patchbay' },
-						{ id: 2, label: 'Audio patchbay' },
-						{ id: 3, label: 'Audio control' },
-						{ id: 4, label: 'Mixer control' },
-						{ id: 127, label: 'Scene' },
-					],
-				},
-				{ type: 'number', id: 'id', label: 'Snapshot/scene ID', default: 1, min: 1, max: 127 },
-			],
-			callback: async (event) => self.applySnapshot(event.options.type, event.options.id),
-		},
-		apply_snapshot_list: {
-			name: 'Legacy/configuration: Apply snapshot/scene list position',
-			options: [
-				{
-					type: 'dropdown',
-					id: 'type',
-					label: 'Type',
-					default: 127,
-					choices: [
-						{ id: 1, label: 'MIDI patchbay' },
-						{ id: 2, label: 'Audio patchbay' },
-						{ id: 3, label: 'Audio control' },
-						{ id: 4, label: 'Mixer control' },
-						{ id: 127, label: 'Scene' },
-					],
-				},
-				{ type: 'number', id: 'index', label: 'List index (0 previous, 127 next)', default: 1, min: 0, max: 127 },
-			],
-			callback: async (event) => self.applySnapshotList(event.options.type, event.options.index),
-		},
-		save_current: {
-			name: 'Legacy/configuration: Save current settings to device memory',
-			options: [],
-			callback: async () => self.saveCurrent(),
-		},
+		...(self.state.profile?.failover
+			? {
+					failover_arm: { name: 'Failover: Arm', options: [], callback: async () => self.setFailover(true) },
+					failover_disarm: { name: 'Failover: Disarm', options: [], callback: async () => self.setFailover(false) },
+					failover_clear: {
+						name: 'Failover: Clear alarm',
+						options: [],
+						callback: async () => self.setFailover(self.state.failoverArmed, true),
+					},
+				}
+			: {}),
+		...(self.state.profile?.protocol === 'legacy'
+			? {
+					apply_snapshot: {
+						name: 'Legacy/configuration: Apply snapshot or scene',
+						options: [
+							{
+								type: 'dropdown',
+								id: 'type',
+								label: 'Type',
+								default: 127,
+								choices: [
+									{ id: 1, label: 'MIDI patchbay' },
+									{ id: 2, label: 'Audio patchbay' },
+									{ id: 3, label: 'Audio control' },
+									{ id: 4, label: 'Mixer control' },
+									{ id: 127, label: 'Scene' },
+								],
+							},
+							{ type: 'number', id: 'id', label: 'Snapshot/scene ID', default: 1, min: 1, max: 127 },
+						],
+						callback: async (event) => self.applySnapshot(event.options.type, event.options.id),
+					},
+					apply_snapshot_list: {
+						name: 'Legacy/configuration: Apply snapshot/scene list position',
+						options: [
+							{
+								type: 'dropdown',
+								id: 'type',
+								label: 'Type',
+								default: 127,
+								choices: [
+									{ id: 1, label: 'MIDI patchbay' },
+									{ id: 2, label: 'Audio patchbay' },
+									{ id: 3, label: 'Audio control' },
+									{ id: 4, label: 'Mixer control' },
+									{ id: 127, label: 'Scene' },
+								],
+							},
+							{ type: 'number', id: 'index', label: 'List index (0 previous, 127 next)', default: 1, min: 0, max: 127 },
+						],
+						callback: async (event) => self.applySnapshotList(event.options.type, event.options.index),
+					},
+					save_current: {
+						name: 'Legacy/configuration: Save current settings to device memory',
+						options: [],
+						callback: async () => self.saveCurrent(),
+					},
+				}
+			: {}),
 		send_note: {
 			name: 'MIDI: Send note on',
 			options: [
@@ -185,26 +195,53 @@ export function UpdateActions(self: ModuleInstance): void {
 			options: [{ type: 'textinput', id: 'data', label: 'Bytes (F0 ... F7)', default: 'F0 F7' }],
 			callback: async (event) => self.sendMidi(parseMidiBytes(event.options.data, true)),
 		},
-		recall_preset: {
-			name: 'iConnectivity: Recall preset',
-			options: [{ type: 'number', id: 'preset', label: 'Preset (1-128)', default: 1, min: 1, max: 128 }],
-			callback: async (event) => self.recallPreset(event.options.preset),
-		},
-		recall_scene: {
-			name: 'PlayAUDIO: Recall Scene A or B',
-			options: [
-				{
-					type: 'dropdown',
-					id: 'scene',
-					label: 'Scene',
-					default: 'A',
-					choices: [
-						{ id: 'A', label: 'Scene A' },
-						{ id: 'B', label: 'Scene B' },
-					],
-				},
-			],
-			callback: async (event) => self.recallScene(event.options.scene),
-		},
-	})
+		...(self.state.profile?.presets
+			? {
+					recall_preset: {
+						name: 'iConnectivity: Recall preset',
+						options: [{ type: 'number', id: 'preset', label: 'Preset (1-128)', default: 1, min: 1, max: 128 }],
+						callback: async (event) => self.recallPreset(event.options.preset),
+					},
+				}
+			: {}),
+		...(self.state.profile?.scenes
+			? {
+					recall_scene: {
+						name: 'PlayAUDIO: Recall Scene A or B',
+						options: [
+							{
+								type: 'dropdown',
+								id: 'scene',
+								label: 'Scene',
+								default: 'A',
+								choices: [
+									{ id: 'A', label: 'Scene A' },
+									{ id: 'B', label: 'Scene B' },
+								],
+							},
+						],
+						callback: async (event) => self.recallScene(event.options.scene),
+					},
+				}
+			: {}),
+		...(self.state.profile?.mixerSnapshots && self.config.mixerSnapshotChannel > 0
+			? {
+					recall_mixer_snapshot: {
+						name: 'PlayAUDIO: Recall mixer snapshot',
+						options: [
+							{
+								type: 'number',
+								id: 'snapshot',
+								label: 'Mixer snapshot (1-128)',
+								default: 1,
+								min: 1,
+								max: 128,
+							},
+						],
+						callback: async (event) => self.recallMixerSnapshot(event.options.snapshot),
+					},
+				}
+			: {}),
+	}
+	self.setActionDefinitions(definitions as never)
 }

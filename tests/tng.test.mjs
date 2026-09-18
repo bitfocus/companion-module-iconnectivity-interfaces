@@ -10,7 +10,9 @@ import {
 	getPresetNameMessage,
 	hardwareVersion,
 	hostSessionMessage,
+	notificationMessage,
 	parseTngMessage,
+	pingMessage,
 } from '../dist/protocol/tng.js'
 
 test('builds the documented wildcard TNG host-session request', () => {
@@ -71,6 +73,24 @@ test('parses captured active preset, preset name, and scene replies', () => {
 	assert.deepEqual(scene.parameters.get(0x41), [1])
 })
 
+test('parses documented SceneNumber notifications from DeviceFeature', () => {
+	const notification = parseTngMessage(
+		buildTngMessage({ productId: 17, serial: 0x3318 }, 4, 5, [0x50, 0x03, 0x01, 0x06, 0x03, 0x01, 0x03, 0x04, 0x02]),
+	)
+	assert.equal(notification.messageClass, 0x50)
+	assert.equal(notification.dataClass, 0x03)
+	assert.deepEqual(notification.parameters.get(0x04), [2])
+})
+
+test('parses documented mixer snapshot notifications from AudioPortInfo', () => {
+	const notification = parseTngMessage(
+		buildTngMessage({ productId: 17, serial: 0x3318 }, 4, 6, [0x50, 0x09, 0x01, 0x06, 0x03, 0x01, 0x03, 0x50, 0x05]),
+	)
+	assert.equal(notification.messageClass, 0x50)
+	assert.equal(notification.dataClass, 0x09)
+	assert.deepEqual(notification.parameters.get(0x50), [5])
+})
+
 test('parses TNG DeviceInfo parameter values', () => {
 	const values = [
 		[1, [...Buffer.from('mioXM')]],
@@ -92,4 +112,25 @@ test('requests the documented identity parameter set', () => {
 	const parsed = parseTngMessage(getDeviceInfoMessage({ productId: 17, serial: 1 }, 2, 3))
 	assert.equal(parsed.messageClass, 3)
 	assert.equal(parsed.dataClass, 2)
+	assert.deepEqual(parsed.content.slice(-9), [1, 2, 3, 4, 5, 6, 0x19, 0x1a, 0x40])
+})
+
+test('builds notification registration and keepalive messages', () => {
+	const address = { productId: 17, serial: 0x3318 }
+	assert.deepEqual(
+		parseTngMessage(notificationMessage(address, 4, 5, true, [1, 6])).content,
+		[0x11, 0, 1, 8, 6, 1, 5, 5, 1, 1, 6],
+	)
+	assert.deepEqual(
+		parseTngMessage(notificationMessage(address, 4, 6, false, [0])).content,
+		[0x11, 0, 1, 7, 6, 1, 4, 5, 2, 0],
+	)
+	assert.deepEqual(parseTngMessage(pingMessage(address, 4, 7)).content, [])
+})
+
+test('ignores malformed TNG packets without throwing', () => {
+	assert.equal(parseTngMessage([0xf0, 0, 1, 0x73, 0x7d, 0xf7]), undefined)
+	const message = buildTngMessage({ productId: 15, serial: 1 }, 1, 1, [0x43, 0x02, 0])
+	message.splice(-2, 0, 0)
+	assert.equal(parseTngMessage(message), undefined)
 })

@@ -17,6 +17,13 @@ test('round trips a legacy message and validates checksum', () => {
 	assert.equal(parseMessage(damaged), undefined)
 })
 
+test('ignores malformed legacy packets without throwing', () => {
+	assert.equal(parseMessage([0xf0, 0, 1, 0x73, 0x7e, 0xf7]), undefined)
+	const message = buildMessage({ productId: 11, serial: 1, transactionId: 1, query: true, command: 1, data: [] })
+	message.splice(-2, 0, 0)
+	assert.equal(parseMessage(message), undefined)
+})
+
 test('7-bit conversions and meter conversion', () => {
 	assert.deepEqual(encode7(0x1234, 2), [0x24, 0x34])
 	assert.equal(decode7([0x24, 0x34]), 0x1234)

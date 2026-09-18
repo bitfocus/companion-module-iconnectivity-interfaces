@@ -16,7 +16,11 @@ Hardware captures against mioXM and PlayAUDIO1U confirm:
 - Data class `0x03`, indexed parameter `0x02`: preset name.
 - Data class `0x08`, indexed parameter `0x41`: active PlayAUDIO1U Scene (`1` = A, `2` = B).
 
-These are read once during discovery, not continuously polled. Later module actions and matching Program Change traffic update cached state.
+These are read once during discovery, not continuously polled by default. Later module actions and matching Program Change traffic update cached state. Optional live monitoring registers the documented NotifyProgramSelector and NotifyFailoverStatus classes, keeps the configuration session alive with protocol ping messages, and updates normalized state from NotParmVal messages.
+
+The captured one-time PlayAUDIO1U Scene reply uses DeviceFeature parameter `0x41` with its required argument, while documented NotifyFailoverStatus messages report DeviceFeature:SceneNumber as parameter `0x04`. Both normalize to the same Companion Scene state.
+
+PlayAUDIO mixer snapshot recall uses a separately configured Preset Selector Program Change channel. NotifyProgramSelector reports changes through AudioPortInfo (data class `0x09`), MixerSnapshotNumber parameter `0x50`. Mixer snapshot state is not queried during discovery because that read requires the authoritative mixer AudioPortID; it remains unknown until observed from MIDI, a module action or a device notification.
 
 ## Legacy (`F0 00 01 73 7E`)
 

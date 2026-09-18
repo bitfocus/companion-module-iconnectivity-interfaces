@@ -1,6 +1,6 @@
 # Agent instructions
 
-Read `AGENTS.md`, `README_AI.md` and `STATUS.md` before acting. For protocol or capability work, use `docs/README.md` to select only the relevant focused document.
+Read `AGENTS.md`, `PROJECT_CONTEXT.md`, `README_AI.md` and `STATUS.md` before acting. For protocol or capability work, use `docs/README.md` to select only the relevant focused document.
 
 ## Repository map
 
@@ -10,7 +10,7 @@ Read `AGENTS.md`, `README_AI.md` and `STATUS.md` before acting. For protocol or 
 - `tests/`: Node test-runner suites; put sanitized protocol fixtures in `tests/fixtures/` if needed.
 - `companion/`: manifest and user-facing help.
 - `docs/`: durable protocol research, capability status and release plan.
-- `dist/`, `pkg/`, root `*.tgz`, `releases/`, `captures/`: generated or investigative artifacts, never source of truth.
+- `dist/`, `pkg/`, root `*.tgz`, `releases/`, `captures/`: generated or investigative artifacts, never source of truth. `releases/` is the sole retained location for testable package archives.
 
 ## Commands
 
@@ -34,6 +34,23 @@ yarn build && node --test tests/<name>.test.mjs
 
 The AppleMIDI integration test opens local UDP sockets. Run it in an environment that permits loopback UDP. After source changes, run build, tests and lint when practical; protocol changes require a focused test or sanitized fixture.
 
+## GitHub and cloud workflow
+
+- The private GitHub repository `mikecreates86/companion-module-iconnectivity` is the source of truth. `main` is the known-good development baseline; start changes on a focused `codex/` branch and merge only after appropriate checks pass.
+- A clean clone must be sufficient for source development. Do not depend on files from `captures/`, generated output, retained package archives, personal Companion exports or machine-specific configuration.
+- Install from the committed `yarn.lock` with Node 22.20.x and Corepack/Yarn 4. Do not replace Yarn with npm or commit a `package-lock.json`.
+- Before considering a source change complete, run `yarn test` and `yarn lint`. Also run `yarn package` and `yarn package:verify` when packaging behavior or release readiness is affected.
+- Automated checks and a successful package do not promote a Candidate to Production. Real hardware/Companion validation and the user's explicit approval remain required.
+
+## Release management (permanent)
+
+- Maintain exactly one documented **Production** version: the most recent package explicitly confirmed stable through real hardware/production testing. A newer package never replaces it automatically; promotion requires explicit user approval.
+- Maintain a separate **Candidate** version: the newest packaged build intended for testing. Record `Candidate: None` explicitly when no Candidate exists.
+- In `STATUS.md` (under **Working Now**), prominently record Production and Candidate with version, date, validation status, and Candidate testing scope. Do not infer either state from version order, a filename, or Git recency; report missing or conflicting evidence.
+- Every package build needs a new, never-reused module version. Do not overwrite or silently replace an archive. A failed or discarded build remains part of version history, and the next testable build increments the version.
+- Put every retained testable package directly in `releases/`, named `<module>-v<version>-PRODUCTION.tgz` or `<module>-v<version>-CANDIDATE.tgz`. Keep older archives unless the user explicitly directs their removal. On promotion, retain the Candidate and create a separately named Production artifact; never overwrite an earlier archive.
+- `releases/README.md` is the authoritative release procedure and archive inventory. Legacy archives that predate this policy may remain, but must not establish a release state or be renamed without clear evidence.
+
 ## Coding rules
 
 - Follow TypeScript strictness, ESM `.js` imports, the existing Prettier configuration and Companion API patterns.
@@ -46,7 +63,7 @@ The AppleMIDI integration test opens local UDP sockets. Run it in an environment
 
 ## Files to avoid modifying
 
-- Never edit `node_modules/`, `dist/`, `pkg/`, root `*.tgz`, `releases/` or capture binaries as source.
+- Never edit `node_modules/`, `dist/`, `pkg/`, root `*.tgz`, `releases/` or capture binaries as source. The sole exception is an explicitly requested release-management action on `releases/`; preserve archive history and never overwrite an existing package.
 - Do not edit `.github/workflows/`, `companion/manifest.json` or `companion/HELP.md` unless the requested change specifically requires CI, packaging metadata or user-facing behavior.
 - Do not commit personal Companion exports, device serial numbers, private IP layouts or unsanitized packet captures.
 

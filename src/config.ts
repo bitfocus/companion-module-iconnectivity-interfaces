@@ -1,7 +1,9 @@
 import type { DropdownChoice, SomeCompanionConfigField } from '@companion-module/base'
 import { listInputs, listOutputs } from './midi.js'
+import type { ExpectedDevice } from './devices.js'
 
 export type ModuleConfig = {
+	expectedDevice: ExpectedDevice
 	transport: 'rtp-midi' | 'usb-midi'
 	inputPort: string
 	outputPort: string
@@ -9,6 +11,7 @@ export type ModuleConfig = {
 	host: string
 	remotePort: number
 	localPort: number
+	responderPort: number
 	configRemotePort: number
 	configLocalPort: number
 	sessionName: string
@@ -16,8 +19,10 @@ export type ModuleConfig = {
 	audioPortId: number
 	presetChannel: number
 	sceneChannel: number
+	mixerSnapshotChannel: number
 	advanced: boolean
 	receiveMidiClock: boolean
+	livePresetSceneMonitoring: boolean
 }
 
 export function GetConfigFields(): SomeCompanionConfigField[] {
@@ -26,7 +31,11 @@ export function GetConfigFields(): SomeCompanionConfigField[] {
 	const outputs = listOutputs()
 	const networkVisible = "$(options:transport) == 'rtp-midi'"
 	const usbVisible = "$(options:transport) == 'usb-midi'"
+	const initiatorVisible = "$(options:transport) == 'rtp-midi' && $(options:role) == 'initiator'"
+	const responderVisible = "$(options:transport) == 'rtp-midi' && $(options:role) == 'responder'"
 	const advancedNetworkVisible = "$(options:transport) == 'rtp-midi' && $(options:advanced) == true"
+	const advancedInitiatorVisible =
+		"$(options:transport) == 'rtp-midi' && $(options:role) == 'initiator' && $(options:advanced) == true"
 	const advancedVisible = '$(options:advanced) == true'
 	const midiChannels: DropdownChoice[] = Array.from({ length: 16 }, (_, index) => ({
 		id: index + 1,
@@ -35,39 +44,54 @@ export function GetConfigFields(): SomeCompanionConfigField[] {
 	return [
 		{
 			type: 'dropdown',
+			id: 'expectedDevice',
+			label: 'Interface model',
+			tooltip:
+				'Select the interface used by this Companion connection so its controls remain available while it is offline. Auto-detect waits for a device connection before showing model-specific controls.',
+			width: 12,
+			default: 'auto',
+			disableAutoExpression: true,
+			choices: [
+				{ id: 'auto', label: 'Auto-detect (model controls require a connection)' },
+				{ id: 'playaudio1u', label: 'PlayAUDIO1U' },
+				{ id: 'playaudio12', label: 'PlayAUDIO12' },
+				{ id: 'mioxm', label: 'mioXM' },
+				{ id: 'mioxl', label: 'mioXL' },
+			],
+		},
+		{
+			type: 'dropdown',
 			id: 'transport',
-			label: 'How is Companion connected?',
+			label: 'Connection type',
+			tooltip:
+				'Choose how Companion connects to the interface. RTP MIDI connects over the network while USB uses local device connections.',
 			width: 12,
 			default: 'rtp-midi',
 			disableAutoExpression: true,
 			choices: [
-				{ id: 'rtp-midi', label: 'Network — Ethernet RTP-MIDI (recommended)' },
-				{ id: 'usb-midi', label: 'Local — USB MIDI connected to this Companion computer' },
+				{ id: 'rtp-midi', label: 'RTP MIDI' },
+				{ id: 'usb-midi', label: 'USB MIDI' },
+			],
+		},
+		{
+			type: 'dropdown',
+			id: 'role',
+			label: 'RTP Role',
+			tooltip: 'Choose whether Companion initiates or responds to RTP connections.',
+			width: 12,
+			default: 'initiator',
+			disableAutoExpression: true,
+			isVisibleExpression: networkVisible,
+			choices: [
+				{ id: 'initiator', label: 'Initiator' },
+				{ id: 'responder', label: 'Responder' },
 			],
 		},
 		{
 			type: 'textinput',
-			id: 'sessionName',
-			label: 'RTP-MIDI session name',
-			description: 'The name shown to the interface and other RTP-MIDI software.',
-			width: 12,
-			default: 'Companion iConnectivity',
-			isVisibleExpression: networkVisible,
-		},
-		{
-			type: 'static-text',
-			id: 'networkIntro',
-			label: 'Network connection',
-			width: 12,
-			isVisibleExpression: networkVisible,
-			value:
-				'Enter the device IP address and the RTP port shown in Auracle. For example, RTP 10 on your mioXM uses control port 5022. Companion calculates the matching data port automatically.',
-		},
-		{
-			type: 'textinput',
 			id: 'host',
-			label: 'iConnectivity device IP address',
-			description: 'Example: 172.16.50.22',
+			label: 'Interface IP Address',
+			description: 'Use a reserved or static address.',
 			width: 8,
 			default: '',
 			isVisibleExpression: networkVisible,
@@ -75,26 +99,33 @@ export function GetConfigFields(): SomeCompanionConfigField[] {
 		{
 			type: 'number',
 			id: 'remotePort',
-			label: 'RTP control port',
-			description: 'Use the port shown in Auracle. The data port is this number + 1.',
+			label: 'Interface RTP Port',
+			tooltip: 'Copy this RTP port from Auracle for the selected interface RTP-MIDI session.',
 			width: 4,
 			default: 5004,
 			min: 1,
 			max: 65534,
-			isVisibleExpression: networkVisible,
+			isVisibleExpression: initiatorVisible,
 		},
 		{
-			type: 'dropdown',
-			id: 'role',
-			label: 'Who starts the RTP connection?',
+			type: 'number',
+			id: 'responderPort',
+			label: 'Companion RTP Port',
+			tooltip: 'Enter this port in the interface RTP-MIDI session as the Companion computer’s destination port.',
+			width: 4,
+			default: 5060,
+			min: 1024,
+			max: 65534,
+			isVisibleExpression: responderVisible,
+		},
+		{
+			type: 'textinput',
+			id: 'sessionName',
+			label: 'RTP Name',
+			description: 'Name that appears in Auracle when showing this connection.',
 			width: 12,
-			default: 'initiator',
-			disableAutoExpression: true,
+			default: 'Companion iConnectivity',
 			isVisibleExpression: networkVisible,
-			choices: [
-				{ id: 'initiator', label: 'Companion starts the connection (recommended)' },
-				{ id: 'responder', label: 'Device starts the connection (advanced)' },
-			],
 		},
 		{
 			type: 'dropdown',
@@ -117,18 +148,11 @@ export function GetConfigFields(): SomeCompanionConfigField[] {
 			isVisibleExpression: usbVisible,
 		},
 		{
-			type: 'static-text',
-			id: 'recallIntro',
-			label: 'Preset and scene recall',
-			width: 12,
-			value:
-				'These channels must match what was saved in the interface with iConnectivity Preset Selector. Companion does not change that device setting.',
-		},
-		{
 			type: 'dropdown',
 			id: 'presetChannel',
-			label: 'Preset recall channel',
-			description: 'Must match the preset receive channel saved on this device with Preset Selector.',
+			label: 'Preset recall Channel',
+			description:
+				'Must match the preset receive channel saved with [Preset Selector](https://iconnectivitysupport.zendesk.com/hc/en-us/articles/27166593354139-Preset-Selector-App).',
 			width: 6,
 			default: 1,
 			choices: midiChannels,
@@ -143,6 +167,36 @@ export function GetConfigFields(): SomeCompanionConfigField[] {
 			choices: [{ id: 0, label: 'Disabled / Not used' }, ...midiChannels],
 		},
 		{
+			type: 'dropdown',
+			id: 'mixerSnapshotChannel',
+			label: 'PlayAUDIO mixer snapshot channel (optional)',
+			description: 'Must match the Mixer Snapshot channel saved with Preset Selector. Leave disabled when unused.',
+			width: 6,
+			default: 0,
+			choices: [{ id: 0, label: 'Disabled / Not used' }, ...midiChannels],
+		},
+		{
+			type: 'checkbox',
+			id: 'receiveMidiClock',
+			label: 'Receive/analyze MIDI Clock',
+			tooltip:
+				'Leave this on when you need MIDI Clock BPM and receive-state variables. Turn it off if the connection carries heavy Clock traffic you do not use.',
+			width: 12,
+			default: true,
+			disableAutoExpression: true,
+		},
+		{
+			type: 'checkbox',
+			id: 'livePresetSceneMonitoring',
+			label: 'Monitor device preset/Scene/mixer changes',
+			tooltip:
+				'Immediately updates Companion when a preset, Scene or mixer snapshot is changed from the device or another app. This keeps the configuration RTP session connected, so Auracle may be unable to connect at the same time.',
+			width: 12,
+			default: false,
+			disableAutoExpression: true,
+			isVisibleExpression: initiatorVisible,
+		},
+		{
 			type: 'checkbox',
 			id: 'advanced',
 			label: 'Show advanced settings',
@@ -151,25 +205,15 @@ export function GetConfigFields(): SomeCompanionConfigField[] {
 			disableAutoExpression: true,
 		},
 		{
-			type: 'checkbox',
-			id: 'receiveMidiClock',
-			label: 'Receive and analyze MIDI Clock',
-			description: 'Disable to ignore incoming MIDI Clock and hide all clock variables.',
-			width: 12,
-			default: true,
-			disableAutoExpression: true,
-			isVisibleExpression: advancedVisible,
-		},
-		{
 			type: 'number',
 			id: 'localPort',
-			label: 'Local RTP control port',
+			label: 'Initiator local RTP-MIDI control port',
 			description: 'Leave at 0 for an automatically assigned port. If specified, it must be even.',
 			width: 4,
 			default: 0,
 			min: 0,
 			max: 65534,
-			isVisibleExpression: advancedNetworkVisible,
+			isVisibleExpression: advancedInitiatorVisible,
 		},
 		{
 			type: 'number',
@@ -185,8 +229,8 @@ export function GetConfigFields(): SomeCompanionConfigField[] {
 		{
 			type: 'number',
 			id: 'configLocalPort',
-			label: 'Local discovery port',
-			description: 'Leave at 0 for automatic assignment. If specified, it must be even.',
+			label: 'Local discovery control port',
+			description: 'Leave at 0 for automatic assignment.',
 			width: 4,
 			default: 0,
 			min: 0,

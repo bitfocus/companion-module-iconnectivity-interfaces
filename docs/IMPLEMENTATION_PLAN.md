@@ -2,13 +2,13 @@
 
 ## Release gates
 
-1. Rebuild actions, feedbacks and presets from detected capabilities; reject unsupported operations with device-level messages.
-2. Add focused tests for capability surfaces, module lifecycle, configuration upgrades, reconnect/backoff and multiple instances.
-3. Fix responder identity/configuration discovery or label responder mode MIDI-only/experimental.
-4. Limit public device/platform claims to hardware-validated combinations; document 64-bit native-addon support.
-5. Run multi-day PlayAUDIO1U + two-mioXM testing across device, Companion and network restarts, Auracle coexistence and high MIDI/Clock load.
-6. Load packaged builds on Raspberry Pi ARM64, macOS Apple Silicon and Windows x64; exercise USB MIDI on at least one platform.
-7. Remove or sanitize private captures/configuration exports, run Bitfocus shared checks and publish a tagged beta with release notes.
+1. **Complete:** Rebuild actions, feedbacks and presets from detected or explicitly configured capabilities; reject unsupported operations with device-level messages.
+2. **Partially complete:** Focused tests now cover capability surfaces, configuration upgrades, reconnect/restart behavior and multiple session isolation. Continue lifecycle and real-hardware coverage where `STATUS.md` identifies gaps.
+3. **Open:** Fix responder identity/configuration discovery or label responder mode MIDI-only/experimental.
+4. **Partially complete:** Limit public device/platform claims to hardware-validated combinations; 64-bit native-addon support is documented, but final public-help reconciliation remains open.
+5. **Open:** Run multi-day PlayAUDIO1U + two-mioXM testing across device, Companion and network restarts, Auracle coexistence and high MIDI/Clock load.
+6. **Open:** Load packaged builds on Raspberry Pi ARM64, macOS Apple Silicon and Windows x64; exercise USB MIDI on at least one platform.
+7. **Open:** Remove or sanitize private captures/configuration exports, run Bitfocus shared checks and publish a tagged beta with release notes.
 
 ## Later capability slices
 

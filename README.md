@@ -12,17 +12,17 @@ Preset and PlayAUDIO Scene receive channels must be configured once on each inte
 
 ## Development
 
-Requires Node 22 and Yarn 4.
+Requires Node 22.20.x and Yarn 4 through Corepack.
 
 ```sh
-yarn install
-yarn build
-yarn test
-yarn lint
-yarn package
+corepack yarn install
+corepack yarn build
+corepack yarn test
+corepack yarn lint
+corepack yarn package
 ```
 
-See `companion/HELP.md` for user setup, `README_AI.md` for architecture and `docs/README.md` for focused technical documentation.
+See `companion/HELP.md` for user setup, `PROJECT_CONTEXT.md` for a complete cold handoff, `README_AI.md` for architecture and `docs/README.md` for focused technical documentation.
 
 ## Safety
 

@@ -8,9 +8,12 @@ export interface CapabilityProfile {
 	failover: boolean
 	scenes: boolean
 	presets: boolean
+	mixerSnapshots: boolean
 	audioProtection: 'documented-tng' | false
 	meterChannels: number
 }
+
+export type ExpectedDevice = 'auto' | 'playaudio1u' | 'mioxm' | 'mioxl' | 'playaudio12'
 
 const legacy = (name: string, overrides: Partial<CapabilityProfile> = {}): CapabilityProfile => ({
 	name,
@@ -22,6 +25,7 @@ const legacy = (name: string, overrides: Partial<CapabilityProfile> = {}): Capab
 	failover: false,
 	scenes: false,
 	presets: true,
+	mixerSnapshots: false,
 	audioProtection: false,
 	meterChannels: 0,
 	...overrides,
@@ -56,12 +60,16 @@ export const TNG_FAMILIES: Record<string, CapabilityProfile> = {
 		midiRouting: true,
 		rtpMidi: true,
 		audio: true,
-		metering: true,
-		failover: true,
+		// These fields are visible in Auracle, but no public TNG definition or
+		// hardware-validated command path exists yet. Keep the validated MIDI,
+		// preset and Scene surface available without advertising unsafe controls.
+		metering: false,
+		failover: false,
 		scenes: true,
 		presets: true,
-		audioProtection: 'documented-tng',
-		meterChannels: 12,
+		mixerSnapshots: true,
+		audioProtection: false,
+		meterChannels: 0,
 	},
 	mioXM: {
 		name: 'mioXM',
@@ -73,6 +81,7 @@ export const TNG_FAMILIES: Record<string, CapabilityProfile> = {
 		failover: false,
 		scenes: false,
 		presets: true,
+		mixerSnapshots: false,
 		audioProtection: false,
 		meterChannels: 0,
 	},
@@ -86,6 +95,7 @@ export const TNG_FAMILIES: Record<string, CapabilityProfile> = {
 		failover: false,
 		scenes: false,
 		presets: true,
+		mixerSnapshots: false,
 		audioProtection: false,
 		meterChannels: 0,
 	},
@@ -98,4 +108,10 @@ export function profileForLegacyProduct(productId: number): CapabilityProfile {
 export function profileForTngProduct(productId: number): CapabilityProfile {
 	const key = ({ 14: 'mioXL', 15: 'mioXM', 17: 'PlayAUDIO1U' } as Record<number, keyof typeof TNG_FAMILIES>)[productId]
 	return key ? TNG_FAMILIES[key] : { ...TNG_FAMILIES.mioXM, name: `Unknown TNG PID ${productId}` }
+}
+
+export function profileForExpectedDevice(device: ExpectedDevice | undefined): CapabilityProfile | undefined {
+	if (!device || device === 'auto') return undefined
+	if (device === 'playaudio12') return LEGACY_PRODUCTS[11]
+	return TNG_FAMILIES[{ playaudio1u: 'PlayAUDIO1U', mioxm: 'mioXM', mioxl: 'mioXL' }[device]]
 }

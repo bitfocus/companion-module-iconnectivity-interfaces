@@ -5,7 +5,7 @@
 	"name": "iConnectivity Interfaces",
 	"shortname": "iConnectivity",
 	"description": "Control and monitor PlayAUDIO and mio-family audio/MIDI interfaces",
-	"version": "0.13.9",
+	"version": "0.14.13",
 	"license": "MIT",
 	"repository": "git+https://github.com/bitfocus/companion-module-iconnectivity-interfaces.git",
 	"bugs": "https://github.com/bitfocus/companion-module-iconnectivity-interfaces/issues",

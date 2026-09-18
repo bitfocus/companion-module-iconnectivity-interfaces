@@ -2,11 +2,22 @@
 /node_modules/
 /.yarn/
 package-lock.json
+/.npmrc
+
+# Local environment, credentials and certificates
+/.env
+/.env.*
+!/.env.example
+*.pem
+*.key
+*.p12
+*.pfx
 
 # Generated builds, packages and reports
 /dist/
 /pkg/
-/releases/
+/releases/*
+!/releases/README.md
 /*.tgz
 /coverage/
 *.tsbuildinfo
@@ -15,6 +26,7 @@ package-lock.json
 /captures/
 *.pcap
 *.pcapng
+*.companionconfig
 
 # Logs, caches, backups and temporary files
 *.log

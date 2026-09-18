@@ -10,7 +10,15 @@ export const TngMessageClass = {
 	notifyParameterValue: 0x50,
 } as const
 
-export const TngDataClass = { sessionInfo: 0x01, deviceInfo: 0x02, presetInfo: 0x03, sceneInfo: 0x08 } as const
+export const TngNotificationClass = { programSelector: 0x01, failoverStatus: 0x06 } as const
+
+export const TngDataClass = {
+	sessionInfo: 0x01,
+	deviceInfo: 0x02,
+	presetInfo: 0x03,
+	sceneInfo: 0x08,
+	audioPortInfo: 0x09,
+} as const
 
 export interface TngAddress {
 	productId: number
@@ -64,9 +72,36 @@ export function hostSessionMessage(sessionId: number, transactionId: number, inp
 }
 
 export function getDeviceInfoMessage(address: TngAddress, sessionId: number, transactionId: number): number[] {
-	const parameterIds = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x40]
+	const parameterIds = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x19, 0x1a, 0x40]
 	const content = [0x03, 0x02, 0x01, 3 + parameterIds.length, 0x01, parameterIds.length, ...parameterIds]
 	return buildTngMessage(address, sessionId, transactionId, content)
+}
+
+export function notificationMessage(
+	address: TngAddress,
+	sessionId: number,
+	transactionId: number,
+	register: boolean,
+	notificationClasses: readonly number[],
+): number[] {
+	const commandSize = 3 + notificationClasses.length
+	const blockSize = 3 + commandSize
+	return buildTngMessage(address, sessionId, transactionId, [
+		0x11,
+		0x00,
+		0x01,
+		blockSize,
+		0x06,
+		0x01,
+		commandSize,
+		0x05,
+		register ? 0x01 : 0x02,
+		...notificationClasses,
+	])
+}
+
+export function pingMessage(address: TngAddress, sessionId: number, transactionId: number): number[] {
+	return buildTngMessage(address, sessionId, transactionId, [])
 }
 
 export function getActivePresetMessage(address: TngAddress, transactionId: number): number[] {
