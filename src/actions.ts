@@ -32,10 +32,34 @@ export type ActionsSchema = {
 	recall_mixer_snapshot: { options: { snapshot: number } }
 }
 
+function finiteNumber(value: unknown, label: string): number {
+	const number = Number(value)
+	if (!Number.isFinite(number)) throw new Error(`${label} must be a number`)
+	return number
+}
+
+/** Zero-based channel nibble. Out-of-range channels are rejected rather than sent elsewhere. */
+function channelNibble(value: unknown): number {
+	const channel = Math.round(finiteNumber(value, 'MIDI channel'))
+	if (channel < 1 || channel > 16) throw new Error(`MIDI channel must be from 1 to 16 (got ${channel})`)
+	return channel - 1
+}
+
+/** 7-bit data byte, clamped so it can never be mistaken for a status byte. */
+function data7(value: unknown, label: string): number {
+	return Math.max(0, Math.min(127, Math.round(finiteNumber(value, label))))
+}
+
 export function UpdateActions(self: ModuleInstance): void {
 	const definitions: Partial<CompanionActionDefinitions<ActionsSchema>> = {
 		discover: { name: 'Discover device', options: [], callback: async () => self.discover() },
-		refresh: { name: 'Refresh all supported state', options: [], callback: async () => self.requestRefresh() },
+		refresh: {
+			name: 'Refresh device state',
+			description:
+				'Re-reads identity, current preset and Scene. Over Ethernet this briefly uses the configuration session, then releases it for Auracle.',
+			options: [],
+			callback: async () => self.requestRefresh(),
+		},
 		...(self.state.profile?.failover
 			? {
 					failover_arm: { name: 'Failover: Arm', options: [], callback: async () => self.setFailover(true) },
@@ -104,7 +128,11 @@ export function UpdateActions(self: ModuleInstance): void {
 				{ type: 'number', id: 'velocity', label: 'Velocity (0 sends note off)', default: 127, min: 0, max: 127 },
 			],
 			callback: async (event) =>
-				self.sendMidi([0x90 | (event.options.channel - 1), event.options.note, event.options.velocity]),
+				self.sendMidi([
+					0x90 | channelNibble(event.options.channel),
+					data7(event.options.note, 'Note'),
+					data7(event.options.velocity, 'Velocity'),
+				]),
 		},
 		send_note_off: {
 			name: 'MIDI: Send note off',
@@ -114,7 +142,11 @@ export function UpdateActions(self: ModuleInstance): void {
 				{ type: 'number', id: 'velocity', label: 'Release velocity', default: 0, min: 0, max: 127 },
 			],
 			callback: async (event) =>
-				self.sendMidi([0x80 | (event.options.channel - 1), event.options.note, event.options.velocity]),
+				self.sendMidi([
+					0x80 | channelNibble(event.options.channel),
+					data7(event.options.note, 'Note'),
+					data7(event.options.velocity, 'Release velocity'),
+				]),
 		},
 		send_note_press: {
 			name: 'MIDI: Press note (automatic release)',
@@ -125,7 +157,14 @@ export function UpdateActions(self: ModuleInstance): void {
 				{ type: 'number', id: 'releaseVelocity', label: 'Release velocity', default: 0, min: 0, max: 127 },
 				{ type: 'number', id: 'duration', label: 'Hold time (milliseconds)', default: 100, min: 1, max: 60000 },
 			],
-			callback: async (event) => self.pressMidiNote(event.options),
+			callback: async (event) =>
+				self.pressMidiNote({
+					channel: channelNibble(event.options.channel) + 1,
+					note: data7(event.options.note, 'Note'),
+					velocity: Math.max(1, data7(event.options.velocity, 'Velocity')),
+					releaseVelocity: data7(event.options.releaseVelocity, 'Release velocity'),
+					duration: finiteNumber(event.options.duration, 'Hold time'),
+				}),
 		},
 		send_cc: {
 			name: 'MIDI: Send control change',
@@ -135,7 +174,11 @@ export function UpdateActions(self: ModuleInstance): void {
 				{ type: 'number', id: 'value', label: 'Value', default: 127, min: 0, max: 127 },
 			],
 			callback: async (event) =>
-				self.sendMidi([0xb0 | (event.options.channel - 1), event.options.controller, event.options.value]),
+				self.sendMidi([
+					0xb0 | channelNibble(event.options.channel),
+					data7(event.options.controller, 'Controller'),
+					data7(event.options.value, 'Value'),
+				]),
 		},
 		send_program: {
 			name: 'MIDI: Send program change',
@@ -143,7 +186,10 @@ export function UpdateActions(self: ModuleInstance): void {
 				{ type: 'number', id: 'channel', label: 'Channel', default: 1, min: 1, max: 16 },
 				{ type: 'number', id: 'program', label: 'Program (1-128)', default: 1, min: 1, max: 128 },
 			],
-			callback: async (event) => self.sendMidi(programChangeBytes(event.options.channel, event.options.program)),
+			callback: async (event) =>
+				self.sendMidi(
+					programChangeBytes(channelNibble(event.options.channel) + 1, finiteNumber(event.options.program, 'Program')),
+				),
 		},
 		send_poly_aftertouch: {
 			name: 'MIDI: Send polyphonic aftertouch',
@@ -153,7 +199,11 @@ export function UpdateActions(self: ModuleInstance): void {
 				{ type: 'number', id: 'pressure', label: 'Pressure', default: 127, min: 0, max: 127 },
 			],
 			callback: async (event) =>
-				self.sendMidi([0xa0 | (event.options.channel - 1), event.options.note, event.options.pressure]),
+				self.sendMidi([
+					0xa0 | channelNibble(event.options.channel),
+					data7(event.options.note, 'Note'),
+					data7(event.options.pressure, 'Pressure'),
+				]),
 		},
 		send_channel_aftertouch: {
 			name: 'MIDI: Send channel pressure (aftertouch)',
@@ -161,7 +211,8 @@ export function UpdateActions(self: ModuleInstance): void {
 				{ type: 'number', id: 'channel', label: 'Channel', default: 1, min: 1, max: 16 },
 				{ type: 'number', id: 'pressure', label: 'Pressure', default: 127, min: 0, max: 127 },
 			],
-			callback: async (event) => self.sendMidi([0xd0 | (event.options.channel - 1), event.options.pressure]),
+			callback: async (event) =>
+				self.sendMidi([0xd0 | channelNibble(event.options.channel), data7(event.options.pressure, 'Pressure')]),
 		},
 		send_pitch_bend: {
 			name: 'MIDI: Send pitch bend',
@@ -177,8 +228,8 @@ export function UpdateActions(self: ModuleInstance): void {
 				},
 			],
 			callback: async (event) => {
-				const value = Math.max(0, Math.min(16383, Math.round(event.options.value) + 8192))
-				self.sendMidi([0xe0 | (event.options.channel - 1), value & 0x7f, (value >> 7) & 0x7f])
+				const value = Math.max(0, Math.min(16383, Math.round(finiteNumber(event.options.value, 'Pitch bend')) + 8192))
+				self.sendMidi([0xe0 | channelNibble(event.options.channel), value & 0x7f, (value >> 7) & 0x7f])
 			},
 		},
 		send_start: { name: 'MIDI: Send Start', options: [], callback: async () => self.sendMidi([0xfa]) },
@@ -200,7 +251,7 @@ export function UpdateActions(self: ModuleInstance): void {
 					recall_preset: {
 						name: 'iConnectivity: Recall preset',
 						options: [{ type: 'number', id: 'preset', label: 'Preset (1-128)', default: 1, min: 1, max: 128 }],
-						callback: async (event) => self.recallPreset(event.options.preset),
+						callback: async (event) => self.recallPreset(finiteNumber(event.options.preset, 'Preset')),
 					},
 				}
 			: {}),
@@ -238,7 +289,7 @@ export function UpdateActions(self: ModuleInstance): void {
 								max: 128,
 							},
 						],
-						callback: async (event) => self.recallMixerSnapshot(event.options.snapshot),
+						callback: async (event) => self.recallMixerSnapshot(finiteNumber(event.options.snapshot, 'Mixer snapshot')),
 					},
 				}
 			: {}),

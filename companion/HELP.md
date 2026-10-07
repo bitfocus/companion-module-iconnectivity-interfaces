@@ -16,6 +16,12 @@ Preset number and name are read from the device every three seconds. Changes fro
 
 PlayAUDIO1U Scene A/B feedback follows live device notifications. Setup reads the active DeviceFeature:SceneNumber directly, including after a module restart while the device is already on B. That read cannot overwrite a newer live Scene notification. Scene stays Unknown if no valid reply is received. Scene actions also update the displayed Scene when Companion sends the recall. Test device-originated changes when verifying live feedback.
 
+**Refresh device state** re-reads the preset number, preset name and Scene on demand through the same regular RTP connection (Auracle stays connected). A live notification that arrives during the read still takes precedence. Use it if you suspect Scene feedback missed a change; Scene is otherwise read only at startup and then follows notifications.
+
+The **Current preset** feedback highlights a button whose preset matches the device-confirmed preset, and the **Device presets** preset category contains ready-made recall buttons for presets 1–8 with that highlight.
+
+The preset, Scene A/B and mixer snapshot selectors each need their own MIDI channel. If the Scene or mixer snapshot channel matches the preset channel (or the two match each other), one Program Change would trigger both, so the module logs a warning and refuses that recall action until the channels differ.
+
 Mixer snapshot state starts as Unknown until observed from an action, matching Program Change or device notification. Configure **PlayAUDIO mixer snapshot channel** only when using that selector. Mixer snapshot monitoring and recall still require their own hardware validation.
 
 **Device state monitoring status** (`state_monitoring`) reports discovery, read failures and notification registration. `Regular RTP: live notifications registered` confirms the subscription was accepted; verify actual changes when commissioning a setup. Normal RTP online status alone does not prove device feedback is working.
@@ -59,7 +65,9 @@ Incoming variables describe traffic observed on the selected user RTP session; o
 
 User MIDI variables include type, channel, number, value, note name, raw bytes, summary and timestamp for both directions. Generic MIDI-compatible variables include `midiIn`, `lastMessage`, `lastNote`, `lastChannel`, `lastMsgType` and `lastValue`. `midiIn` pulses for each actionable incoming message and can drive a Companion **Variable changed** trigger. Message strings use forms such as `cc_12_102_127`.
 
-MIDI actions include Note On/Off, timed note press, Control Change, Program Change, polyphonic aftertouch, channel pressure, pitch bend, Start/Stop/Continue, Clock, raw hexadecimal MIDI and validated hexadecimal SysEx.
+MIDI actions include Note On/Off, timed note press, Control Change, Program Change, polyphonic aftertouch, channel pressure, pitch bend, Start/Stop/Continue, Clock, raw hexadecimal MIDI and validated hexadecimal SysEx. A channel outside 1–16 (for example from an expression) is rejected with an error rather than sent as a different message; note, controller and value fields are clamped to 0–127.
+
+Incoming RTP packets that carry several MIDI messages are split into individual messages in order, so a device notification and a Program Change sent together are both handled. Packets that do not follow the RTP-MIDI command-list format are passed through unchanged, as in earlier versions.
 
 **Receive/analyze MIDI Clock** controls Clock BPM and receive-state variables. Clock pulses are counted individually; variable publication is coalesced. Clock and Active Sensing are separated from actionable MIDI. Clock stops after 1.5 seconds without a pulse and BPM returns to zero. Notes, CC, Program Change and transport events remain ordered with an individual receive pulse. A bounded queue exposes queue depth and dropped-message diagnostics.
 

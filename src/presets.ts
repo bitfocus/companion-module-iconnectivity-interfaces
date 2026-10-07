@@ -2,9 +2,13 @@ import type { ModuleSchema } from './main.js'
 import type ModuleInstance from './main.js'
 import type { CompanionPresetDefinitions, CompanionPresetSection } from '@companion-module/base'
 
+const PRESET_BUTTONS = 8
+
 export function UpdatePresets(self: ModuleInstance): void {
 	const supportsFailover = !!self.state.profile?.failover
 	const supportsScenes = !!self.state.profile?.scenes
+	const supportsPresets = !!self.state.profile?.presets
+	const presetNumbers = Array.from({ length: PRESET_BUTTONS }, (_, index) => index + 1)
 	const structure: CompanionPresetSection[] = [
 		{
 			id: 'status',
@@ -22,8 +26,38 @@ export function UpdatePresets(self: ModuleInstance): void {
 				},
 			],
 		},
+		...(supportsPresets
+			? [
+					{
+						id: 'device_presets',
+						name: 'Device presets',
+						definitions: [
+							{
+								id: 'preset_recall',
+								name: 'Recall preset',
+								type: 'simple' as const,
+								presets: presetNumbers.map((preset) => `preset_${preset}`),
+							},
+						],
+					},
+				]
+			: []),
 	]
 	const presets: CompanionPresetDefinitions<ModuleSchema> = {
+		...(supportsPresets
+			? Object.fromEntries(
+					presetNumbers.map((preset) => [
+						`preset_${preset}`,
+						{
+							type: 'simple' as const,
+							name: `Preset ${preset}`,
+							style: { text: `PRESET\n${preset}`, size: 30, color: 0xffffff, bgcolor: 0x333333, show_topbar: false },
+							steps: [{ down: [{ actionId: 'recall_preset' as const, options: { preset } }], up: [] }],
+							feedbacks: [{ feedbackId: 'current_preset' as const, options: { preset }, style: { bgcolor: 0x0055aa } }],
+						},
+					]),
+				)
+			: {}),
 		device_status: {
 			type: 'simple',
 			name: 'Device status',

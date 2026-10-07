@@ -101,14 +101,142 @@ export function rtpMidiPacket(sequence: number, timestamp: number, ssrc: number,
 	return packet
 }
 
-export function parseRtpMidi(packet: Buffer): number[] | undefined {
+export function parseRtpMidiSection(packet: Buffer): { section: number[]; firstHasDelta: boolean } | undefined {
 	if (packet.length < 13 || packet[0] >> 6 !== 2 || packet.readUInt16BE(0) === SIGNATURE) return undefined
 	const first = packet[12]
 	const extended = !!(first & 0x80)
 	const length = extended ? ((first & 0x0f) << 8) | (packet[13] ?? 0) : first & 0x0f
 	const offset = extended ? 14 : 13
 	if (packet.length < offset + length) return undefined
-	return [...packet.subarray(offset, offset + length)]
+	return { section: [...packet.subarray(offset, offset + length)], firstHasDelta: !!(first & 0x20) }
+}
+
+/** Returns the raw RTP-MIDI command section, including any delta times. */
+export function parseRtpMidi(packet: Buffer): number[] | undefined {
+	return parseRtpMidiSection(packet)?.section
+}
+
+export const MAX_SYSEX_BYTES = 65536
+
+function channelDataLength(status: number): number {
+	return (status & 0xf0) === 0xc0 || (status & 0xf0) === 0xd0 ? 1 : 2
+}
+
+function systemCommonDataLength(status: number): number {
+	return status === 0xf2 ? 2 : status === 0xf1 || status === 0xf3 ? 1 : 0
+}
+
+/**
+ * Splits RFC 6295 MIDI command lists into individual MIDI messages. A packet may
+ * carry several commands separated by delta times, use running status, embed
+ * realtime bytes in SysEx, or segment SysEx across packets (F0..F0, F7..F0,
+ * F7..F7, with F4 cancelling).
+ *
+ * Compatibility: a section that does not decode cleanly from start to end is
+ * delivered unchanged as one message, exactly as earlier versions did, so a
+ * device that deviates from RFC 6295 never loses traffic it used to deliver.
+ */
+export class RtpMidiCommandDecoder {
+	private pendingSysex?: number[]
+
+	reset(): void {
+		this.pendingSysex = undefined
+	}
+
+	decode(packet: Buffer): number[][] | undefined {
+		const parsed = parseRtpMidiSection(packet)
+		return parsed && this.decodeSection(parsed.section, parsed.firstHasDelta)
+	}
+
+	decodeSection(section: readonly number[], firstHasDelta = false): number[][] {
+		const pendingBefore = this.pendingSysex
+		const messages = this.decodeStrict(section, firstHasDelta)
+		if (messages) return messages
+		this.pendingSysex = pendingBefore
+		return section.length ? [[...section]] : []
+	}
+
+	/** Returns undefined unless the whole section is a well-formed command list. */
+	private decodeStrict(section: readonly number[], firstHasDelta: boolean): number[][] | undefined {
+		const messages: number[][] = []
+		let offset = 0
+		let runningStatus = 0
+		let expectDelta = firstHasDelta
+		while (offset < section.length) {
+			if (expectDelta) {
+				let terminated = false
+				for (let bytes = 0; bytes < 4 && offset < section.length; bytes++)
+					if (!(section[offset++] & 0x80)) {
+						terminated = true
+						break
+					}
+				if (!terminated) return undefined
+				// A trailing delta time with no command after it is tolerated.
+				if (offset >= section.length) break
+			}
+			expectDelta = true
+			const status = section[offset]
+			if (status === 0xf0 || status === 0xf7) {
+				runningStatus = 0
+				const next = this.readSysex(section, offset, messages)
+				if (next < 0) return undefined
+				offset = next
+			} else if (status >= 0xf8) {
+				messages.push([status])
+				offset++
+			} else if (status >= 0xf1) {
+				runningStatus = 0
+				const length = systemCommonDataLength(status)
+				const data = section.slice(offset + 1, offset + 1 + length)
+				if (data.length !== length || data.some((byte) => byte & 0x80)) return undefined
+				messages.push([status, ...data])
+				offset += 1 + length
+			} else {
+				const hasStatus = status >= 0x80
+				if (hasStatus) runningStatus = status
+				else if (!runningStatus) return undefined
+				const start = hasStatus ? offset + 1 : offset
+				const length = channelDataLength(runningStatus)
+				const data = section.slice(start, start + length)
+				if (data.length !== length || data.some((byte) => byte & 0x80)) return undefined
+				messages.push([runningStatus, ...data])
+				offset = start + length
+			}
+		}
+		return messages
+	}
+
+	/** Returns the offset after the SysEx command, or -1 when the rest of the list is unusable. */
+	private readSysex(section: readonly number[], offset: number, messages: number[][]): number {
+		const continuation = section[offset] === 0xf7
+		const data: number[] = []
+		for (let index = offset + 1; index < section.length; index++) {
+			const byte = section[index]
+			if (byte < 0x80) {
+				data.push(byte)
+				continue
+			}
+			if (byte >= 0xf8) {
+				messages.push([byte])
+				continue
+			}
+			const prefix = continuation ? this.pendingSysex : [0xf0]
+			if (byte === 0xf7) {
+				this.pendingSysex = undefined
+				if (prefix && prefix.length + data.length < MAX_SYSEX_BYTES) messages.push([...prefix, ...data, 0xf7])
+				return index + 1
+			}
+			if (byte === 0xf0) {
+				this.pendingSysex = prefix && prefix.length + data.length < MAX_SYSEX_BYTES ? [...prefix, ...data] : undefined
+				return index + 1
+			}
+			// F4 cancels a segmented SysEx; any other status byte is malformed.
+			this.pendingSysex = undefined
+			return byte === 0xf4 ? index + 1 : -1
+		}
+		this.pendingSysex = undefined
+		return -1
+	}
 }
 
 export class AppleMidiSession extends EventEmitter {
@@ -123,6 +251,7 @@ export class AppleMidiSession extends EventEmitter {
 	private peerControl?: RemoteInfo
 	private peerData?: RemoteInfo
 	private peerToken?: number
+	private readonly decoder = new RtpMidiCommandDecoder()
 	private status: AppleMidiStatus = {
 		connected: false,
 		peerName: '',
@@ -247,10 +376,10 @@ export class AppleMidiSession extends EventEmitter {
 			this.handleSync(packet, peer)
 			return
 		}
-		const midi = parseRtpMidi(packet)
-		if (midi) {
+		const messages = this.decoder.decode(packet)
+		if (messages) {
 			this.status.lastSeen = Date.now()
-			this.emit('midi', midi)
+			for (const midi of messages) this.emit('midi', midi)
 			this.emit('status', this.getStatus())
 		}
 	}
@@ -309,6 +438,7 @@ export class AppleMidiSession extends EventEmitter {
 		this.peerControl = undefined
 		this.peerData = undefined
 		this.peerToken = undefined
+		this.decoder.reset()
 		this.setConnected(false, reason)
 	}
 	private setConnected(connected: boolean, disconnectReason = ''): void {
