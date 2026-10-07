@@ -11,6 +11,8 @@ jobs:
 
     permissions:
       packages: read
+      # Required for the shared workflow to check out this private repository.
+      contents: read
 
     uses: bitfocus/actions/.github/workflows/module-checks.yaml@main
     # with:
