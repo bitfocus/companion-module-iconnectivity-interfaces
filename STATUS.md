@@ -13,6 +13,7 @@
 
 ## Recently Completed
 
+- Candidate 0.15.1 follow-up (2026-10-07): the PA1U lag cleared after the user power-cycled the interface, so it was a temporary device-side condition rather than a module change. The user reported that 0.15.1 seems fine in use afterwards. The offline/reconfiguration status, Refresh, Device presets buttons and background-read checks were not reported individually and remain open; endurance and recovery testing per `docs/STABILITY_CHECKLIST.md` are still required before any promotion.
 - Candidate 0.15.1 Auracle responsiveness check (2026-10-07): the user noticed a short delay before Auracle showed the active Scene when opening the interface. With diagnostics enabled, Companion's internal command count rose only from 16 to 18–20 during Auracle's load, the normal background rate rather than extra traffic. The user then reported no measurable difference in Auracle responsiveness between 0.15.1 and 0.14.22. Treated as normal Auracle/interface behaviour; no change made.
 - Candidate 0.15.1 first hardware result (2026-10-07): the user reported that 0.15.1 connects quickly and the interface still appears in Auracle while the module runs, so the 0.15.0 Auracle regression is not present. Device model, timing, preset/Scene feedback, offline/reconfiguration status, Refresh and the preset buttons were not reported separately and remain in the 0.15.1 testing scope.
 
