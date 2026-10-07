@@ -1,6 +1,6 @@
 # GitHub persistence audit: Candidate 0.14.22
 
-Audit date: 2026-10-07. Current Candidate: **0.14.22**. Production: **0.13.3**.
+Audit date: 2026-10-07. At audit time: Candidate **0.14.22**, Production **0.13.3**. Later on 2026-10-07 the user promoted 0.14.22 to Production; see `STATUS.md`.
 
 ## Recovery evidence
 

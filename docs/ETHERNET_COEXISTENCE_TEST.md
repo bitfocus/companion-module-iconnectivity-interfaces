@@ -1,6 +1,6 @@
 # Auracle and Companion over Ethernet: Candidate 0.14.22
 
-Regular-RTP monitoring is now automatic for PA1U/mioXM and Auto-detect Ethernet initiators. Concurrent Auracle access and feedback were user-confirmed on 0.14.18 for both supported devices. This Candidate verifies the simpler defaults and saved-configuration migration. Production remains 0.13.3.
+Regular-RTP monitoring is now automatic for PA1U/mioXM and Auto-detect Ethernet initiators. Concurrent Auracle access and feedback were user-confirmed on 0.14.18 for both supported devices. This Candidate verifies the simpler defaults and saved-configuration migration. 0.14.22 was promoted to Production on 2026-10-07.
 
 ## Setup
 

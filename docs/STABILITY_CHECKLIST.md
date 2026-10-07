@@ -2,7 +2,7 @@
 
 This checklist qualifies the tested scope: Companion as an Ethernet initiator, PA1U/mioXM regular-RTP monitoring, native preset recall, PA1U Scene A/B, and Auracle connected concurrently over Ethernet. It does not require finishing unrelated TNG features. Other devices, USB/responder modes and mixer snapshots have separate qualification requirements.
 
-Production remains 0.13.3. Candidate 0.14.22 corrects the startup Scene query after a B-at-restart bug on 0.14.21. It retains optional diagnostic variables and the improved startup timing. Do not promote a Candidate merely because it has a newer version number.
+Production is 0.14.22 (promoted 2026-10-07 by the user before this checklist was completed); Candidate 0.15.1 is under test. Use this checklist to qualify each Candidate. Candidate 0.14.22 corrects the startup Scene query after a B-at-restart bug on 0.14.21. It retains optional diagnostic variables and the improved startup timing. Do not promote a Candidate merely because it has a newer version number.
 
 ## Immediate check on 0.14.22
 
