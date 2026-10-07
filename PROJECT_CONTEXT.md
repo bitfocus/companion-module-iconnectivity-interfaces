@@ -24,9 +24,11 @@ Success means the Candidate passes automated checks, the documented hardware tes
 
 ### Release state
 
-- **Production: 0.13.3.** Explicitly confirmed stable on real hardware/production on 2026-08-23. Retained archive: `releases/iconnectivity-interfaces-0.13.3.tgz`. SHA-256 observed 2026-09-11: `73178c9cdec28ff23007fb3abe098b023f6c5e84c09cd9b93e5fbbe6130ef89f`.
-- **Candidate: 0.14.22.** Built 2026-10-05 for correct active Scene initialization after restart. All 70 tests, lint, package build and package verification passed under Node 22.20.0/Yarn 4.17.0. Archive: `releases/iconnectivity-interfaces-v0.14.22-CANDIDATE.tgz`. The user confirmed the supplied PA1U Scene startup regression test; broader recovery/endurance qualification remains. Production remains 0.13.3.
-- `package.json` and `companion/manifest.json` both identify the working version as 0.14.22.
+- **Production: 0.14.22.** promoted to Production on 2026-10-07 with the user's explicit approval after PA1U/mioXM hardware use (concurrent Ethernet Auracle access, preset/Scene feedback, module restart, Scene B at restart). Production archive: `releases/iconnectivity-interfaces-v0.14.22-PRODUCTION.tgz`, a byte-identical copy of the retained Candidate archive `iconnectivity-interfaces-v0.14.22-CANDIDATE.tgz` (original build SHA-256 `6edee0780fd7104d58e20e2323bd697b66813ab8f3f7d70f232d08caff5705b6`); it must not be rebuilt. The `docs/STABILITY_CHECKLIST.md` endurance and power-cycle scope was not completed before promotion. Previous Production: 0.13.3 (2026-08-23), retained.
+- **Candidate: 0.15.1.** Built 2026-10-07 on the restored 0.14.22 source from a fresh audit; not hardware-tested. Archive `releases/iconnectivity-interfaces-v0.15.1-CANDIDATE.tgz`, SHA-256 `d7e1c030ebfbb1bc8fb6107fd52243b59a15569e14af4107ea1d74183604e555`. See `STATUS.md` for its testing scope.
+- **Failed: 0.15.0.** Built from the stale 0.14.13 baseline; blocked Auracle. Never reuse.
+- **Prior Candidate: 0.14.22**, promoted to Production on 2026-10-07 (rollback target). Built 2026-10-05 for correct active Scene initialization after restart. All 70 tests, lint, package build and package verification passed under Node 22.20.0/Yarn 4.17.0. Archive: `releases/iconnectivity-interfaces-v0.14.22-CANDIDATE.tgz`. The user confirmed the supplied PA1U Scene startup regression test; broader recovery/endurance qualification remains. Now Production.
+- `package.json` and `companion/manifest.json` both identify the working version as 0.15.1.
 - `releases/README.md` is authoritative for archive history, failed versions and promotion procedure.
 
 ### Working now
@@ -180,7 +182,7 @@ corepack yarn package
 ## 7. Important identifiers and conventions
 
 - Module package name: `iconnectivity`; Companion module ID: `iconnectivity-interfaces`.
-- Current working version: `0.14.22` in both package and manifest.
+- Current working version: `0.15.1` in both package and manifest.
 - Git branch prefix for new work: `codex/`, unless the user requests another name.
 - Capability matrix legend: **H** hardware-validated, **I** implemented but needing release validation, **P** planned/publicly documented, **N/A** not applicable.
 - Device product IDs used in active TNG mapping: mioXL 14, mioXM 15, PlayAUDIO1U 17. Legacy PlayAUDIO12 is product ID 11.
@@ -250,7 +252,7 @@ corepack yarn package
 - Auracle-visible PA1U failover, metering and audio protection were previously overrepresented by product profiles. Those unsafe public controls are now disabled until public definitions and hardware evidence exist.
 - Failover alarm was previously used as a proxy for the active computer Scene. That was incorrect and was replaced by normalized `current_scene`.
 - Continuously retaining the TNG configuration session blocks or competes with Auracle. The standard PA1U/mioXM path now avoids that endpoint; the older initial-read/optional-retention behavior remains an advanced compatibility path.
-- Failed versions 0.14.7, 0.14.8 and 0.14.9 must never be reused. See `releases/README.md` for exact failures.
+- Failed versions 0.14.7, 0.14.8, 0.14.9 and 0.15.0 must never be reused. See `releases/README.md` for exact failures.
 - Candidate 0.14.2 was built under unsupported Node 24.19.0 before the runtime guard was fixed and must not be treated as qualified.
 - Two different 0.14.0 archives exist. Neither is authoritative or policy-conforming; preserve both for history and do not treat `-verified` as an overwrite/replacement.
 - Unbounded or per-pulse Companion Clock publication was too costly. Clock pulses are fully counted but published at a controlled interval, and identical normal message descriptions do not force redundant state publication.
@@ -258,7 +260,7 @@ corepack yarn package
 
 ## 11. Known issues and risks
 
-- Production 0.13.3 and Candidate 0.14.22 remain distinct release states; `main` contains the earlier 0.14.13 baseline. Git recency never promotes a release.
+- Production 0.14.22 and Candidate 0.15.1 remain distinct release states. Git recency or version order never promotes a release; promotion requires explicit user approval.
 - Candidate 0.14.19 is not Production. Regular-RTP coexistence/feedback was user-confirmed on PA1U and mioXM using 0.14.18, but the cleaned defaults/migration, retained offline-model/mixer-snapshot scope and broader endurance/platform checks are not release-qualified.
 - Live monitoring can prevent Auracle from connecting. Broader keepalive/reconnect and contention behavior remains unverified.
 - Responder mode accepts MIDI sessions but lacks a complete identity/configuration discovery path.

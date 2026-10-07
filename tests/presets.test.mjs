@@ -34,3 +34,23 @@ test('Preset buttons default to 30-point shrink-to-fit text', () => {
 		assert.equal(preset.style.size, 30)
 	}
 })
+
+test('Preset recall buttons highlight the current preset', () => {
+	let structure
+	let definitions
+	UpdatePresets({
+		state: { profile: { presets: true, scenes: false, failover: false } },
+		setPresetDefinitions(sections, presets) {
+			structure = sections
+			definitions = presets
+		},
+	})
+	assert.deepEqual(definitions.preset_3.steps[0].down, [{ actionId: 'recall_preset', options: { preset: 3 } }])
+	assert.deepEqual(definitions.preset_3.feedbacks, [
+		{ feedbackId: 'current_preset', options: { preset: 3 }, style: { bgcolor: 0x0055aa } },
+	])
+	assert.deepEqual(
+		structure.at(-1).definitions[0].presets,
+		Array.from({ length: 8 }, (_, i) => `preset_${i + 1}`),
+	)
+})

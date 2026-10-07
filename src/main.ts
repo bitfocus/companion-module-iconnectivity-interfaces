@@ -257,8 +257,12 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		this.detectedProfile = profile
 		const expected = profileForExpectedDevice(this.config.expectedDevice)
 		this.deviceModelMismatch = !!expected && expected.name !== profile.name
-		this.state.profile = expected ?? profile
-		this.updateCapabilitySurface()
+		const next = expected ?? profile
+		const changed = this.state.profile?.name !== next.name || this.state.profile?.protocol !== next.protocol
+		this.state.profile = next
+		// Every TNG reply, including the periodic status reads, passes through
+		// here. Only rebuild the Companion surface when the profile changes.
+		if (changed) this.updateCapabilitySurface()
 		if (this.deviceModelMismatch) {
 			this.updateStatus(InstanceStatus.BadConfig, `Configured for ${expected?.name}, but detected ${profile.name}`)
 			return false
@@ -327,6 +331,16 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 			this.midiClockIntervals.length = 0
 		}
 		this.updateCapabilitySurface()
+		for (const [selector, label] of [
+			['scene', 'Scene A/B'],
+			['mixerSnapshot', 'mixer snapshot'],
+		] as const) {
+			const conflict = this.selectorChannelConflict(selector)
+			if (conflict) this.log('warn', `The ${label} channel is the same as ${conflict}; its recall action is disabled`)
+		}
+		// Publish the reset state (including feedbacks) immediately. Otherwise a
+		// reconfigured instance keeps showing the previous connection as online.
+		this.publishState()
 		try {
 			if ((this.config.transport ?? 'rtp-midi') === 'rtp-midi') {
 				if (!isIPv4(this.config.host ?? '')) {
@@ -360,6 +374,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 					sessionName: this.config.sessionName || 'Companion iConnectivity',
 				})
 				this.networkTransport = transport
+				this.updateNetworkStatus()
 				transport.on('midi', (bytes: number[]) => {
 					if (this.networkTransport === transport && generation === this.lifecycleGeneration)
 						this.receiveUserMidi(bytes)
@@ -900,14 +915,20 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 			if (this.state.profile?.mixerSnapshots) this.state.currentMixerSnapshot = 1
 			observed = true
 		}
-		if (this.config.sceneChannel > 0 && channel === this.config.sceneChannel && this.state.profile?.scenes) {
+		if (
+			this.config.sceneChannel > 0 &&
+			channel === this.config.sceneChannel &&
+			this.state.profile?.scenes &&
+			!this.selectorChannelConflict('scene')
+		) {
 			this.state.currentScene = program === 1 ? 'A' : program === 2 ? 'B' : String(program)
 			observed = true
 		}
 		if (
 			this.config.mixerSnapshotChannel > 0 &&
 			channel === this.config.mixerSnapshotChannel &&
-			this.state.profile?.mixerSnapshots
+			this.state.profile?.mixerSnapshots &&
+			!this.selectorChannelConflict('mixerSnapshot')
 		) {
 			this.state.currentMixerSnapshot = program
 			observed = true
@@ -949,11 +970,23 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		this.publishState(this.usesRegularRtpMonitoring())
 	}
 
+	/** Describes a selector channel that would also trigger another configured selector. */
+	selectorChannelConflict(selector: 'scene' | 'mixerSnapshot'): string | undefined {
+		const channel = selector === 'scene' ? this.config.sceneChannel : this.config.mixerSnapshotChannel
+		if (!channel) return undefined
+		if (channel === (this.config.presetChannel || 1)) return `the preset recall channel (${channel})`
+		if (selector === 'mixerSnapshot' && channel === this.config.sceneChannel)
+			return `the Scene A/B channel (${channel})`
+		return undefined
+	}
+
 	recallScene(scene: string): void {
 		this.requireMatchingDevice()
 		if (!this.state.profile?.scenes) throw new Error('The detected device does not support Scene A/B')
 		if (!this.config.sceneChannel)
 			throw new Error('Configure a PlayAUDIO Scene A/B MIDI channel in connection settings')
+		const conflict = this.selectorChannelConflict('scene')
+		if (conflict) throw new Error(`The Scene A/B channel is the same as ${conflict}; choose a different channel`)
 		const normalized = scene === 'B' ? 'B' : 'A'
 		const channel = Math.max(1, Math.min(16, this.config.sceneChannel))
 		const bytes = programChangeBytes(channel, normalized === 'A' ? 1 : 2)
@@ -969,6 +1002,8 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		if (!this.state.profile?.mixerSnapshots) throw new Error('The detected device does not support mixer snapshots')
 		if (!this.config.mixerSnapshotChannel)
 			throw new Error('Configure a PlayAUDIO mixer snapshot MIDI channel in connection settings')
+		const conflict = this.selectorChannelConflict('mixerSnapshot')
+		if (conflict) throw new Error(`The mixer snapshot channel is the same as ${conflict}; choose a different channel`)
 		const value = Math.max(1, Math.min(128, Math.round(snapshot)))
 		const channel = Math.max(1, Math.min(16, this.config.mixerSnapshotChannel))
 		const bytes = programChangeBytes(channel, value)
@@ -1151,11 +1186,47 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 	}
 	requestRefresh(): void {
 		this.requireMatchingDevice()
+		if (this.state.profile?.protocol !== 'legacy' || !this.state.address.productId) {
+			this.refreshTngState()
+			return
+		}
 		this.send(Commands.getCommandList)
 		this.send(Commands.getInfo, [5])
 		this.send(Commands.getSnapshotGlobal)
 		if (this.state.profile?.failover) this.send(Commands.getHardwareValue, [3, 0])
 	}
+	/**
+	 * Re-reads TNG identity or preset, preset name and Scene. Never sends legacy
+	 * configuration commands to a TNG device.
+	 */
+	private refreshTngState(): void {
+		if (this.usesRegularRtpMonitoring()) {
+			if (!this.networkConnected) throw new Error('The interface RTP-MIDI session is not connected')
+			if (this.state.identityStatus !== 'TNG identity received') {
+				this.discover(true)
+				return
+			}
+			// A read sequence is already running; it will publish fresh values.
+			if (this.pendingStateReads.size || this.stateReadTimeout) return
+			// An explicit refresh re-reads Scene as well. Live notifications still take
+			// precedence if one arrives before this read's reply.
+			this.regularRtpSceneInitialReadComplete = false
+			this.regularRtpSceneNotificationReceived = false
+			this.regularRtpRetryAt = 0
+			this.requestInitialOperationalState()
+			return
+		}
+		this.identityAttemptAt = 0
+		if (!this.networkTransport) {
+			this.discover(true)
+			return
+		}
+		if (!this.networkConnected) throw new Error('The interface RTP-MIDI session is not connected')
+		this.configRetryAt = 0
+		if (!this.configNetworkTransport) void this.openConfigurationTransport()
+		else if (this.configNetworkConnected) this.discover(true)
+	}
+
 	u14(value: number): number[] {
 		return [(value >> 7) & 0x7f, value & 0x7f]
 	}

@@ -1,6 +1,6 @@
 # GitHub persistence audit: Candidate 0.14.22
 
-Audit date: 2026-10-07. Current Candidate: **0.14.22**. Production: **0.13.3**.
+Audit date: 2026-10-07. At audit time: Candidate **0.14.22**, Production **0.13.3**. Later on 2026-10-07 the user promoted 0.14.22 to Production; see `STATUS.md`.
 
 ## Recovery evidence
 
@@ -75,6 +75,12 @@ this original 0.14.14–0.14.22 history. Preserve that branch. Any future integr
 must explicitly reconcile it against the restored 0.14.22 source and history;
 its larger version number does not prove it contains these changes or supersede
 the user's tested Candidate.
+
+Reconciled 2026-10-07: the 0.15.0 build failed on hardware (Auracle could not see
+the PA1U) because it was based on 0.14.13. The branch was restarted from this
+restored 0.14.22 `main`; the old 0.15.0 commits are preserved in its history
+through a merge that keeps none of their files. Applicable audit fixes were
+re-derived against 0.14.22 and packaged as Candidate 0.15.1.
 
 Chronological research notes retain earlier pending statements as historical
 observations. The latest release state and validation are defined by `STATUS.md`
