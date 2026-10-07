@@ -3,9 +3,43 @@ import type { CapabilityProfile } from './devices.js'
 
 export type VariablesSchema = Record<string, string | number | boolean>
 
+const DIAGNOSTIC_VARIABLE_IDS = new Set([
+	'product_id',
+	'protocol_version',
+	'detected_capabilities',
+	'rtp_peer_address',
+	'rtp_reconnect_attempts',
+	'rtp_last_disconnect_reason',
+	'rtp_last_connected_timestamp',
+	'supports_audio',
+	'supports_failover',
+	'supports_metering',
+	'supports_scenes',
+	'supports_mixer_snapshots',
+	'supports_midi_routing',
+	'supports_rtp_midi',
+	'last_ack',
+	'midi_in_count',
+	'midi_in_dropped_count',
+	'midi_in_queue_depth',
+	'midi_out_count',
+	'device_command_out_count',
+	'device_response_in_count',
+	'last_device_command_out',
+	'last_device_response_in',
+	'midi_clock_pulse_count',
+	'midi_clock_last_timestamp',
+])
+
+export function FilterDiagnosticVariables(values: VariablesSchema, showDiagnostics = false): VariablesSchema {
+	if (showDiagnostics) return values
+	return Object.fromEntries(Object.entries(values).filter(([id]) => !DIAGNOSTIC_VARIABLE_IDS.has(id)))
+}
+
 export function GetVariableDefinitions(
 	profile?: CapabilityProfile,
 	receiveMidiClock = true,
+	showDiagnostics = false,
 ): Record<string, { name: string }> {
 	const definitions: Record<string, { name: string }> = {
 		online: { name: 'Device online' },
@@ -18,6 +52,7 @@ export function GetVariableDefinitions(
 		firmware_version: { name: 'Firmware version' },
 		hardware_version: { name: 'Hardware version' },
 		identity_status: { name: 'Identity discovery status' },
+		state_monitoring: { name: 'Device state monitoring status' },
 		detected_capabilities: { name: 'Detected device capabilities' },
 		rtp_peer_address: { name: 'RTP-MIDI peer address' },
 		rtp_reconnect_attempts: { name: 'RTP-MIDI reconnect attempts since last connection' },
@@ -88,9 +123,16 @@ export function GetVariableDefinitions(
 	}
 	if (profile?.metering)
 		for (let i = 1; i <= profile.meterChannels; i++) definitions[`meter_${i}_db`] = { name: `Output ${i} meter (dBFS)` }
+	if (!showDiagnostics) for (const id of DIAGNOSTIC_VARIABLE_IDS) delete definitions[id]
 	return definitions
 }
 
 export function UpdateVariableDefinitions(self: ModuleInstance): void {
-	self.setVariableDefinitions(GetVariableDefinitions(self.state.profile, self.config.receiveMidiClock !== false))
+	self.setVariableDefinitions(
+		GetVariableDefinitions(
+			self.state.profile,
+			self.config.receiveMidiClock !== false,
+			self.config.showDiagnostics === true,
+		),
+	)
 }

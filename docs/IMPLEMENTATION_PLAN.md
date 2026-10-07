@@ -24,3 +24,7 @@
 - Firmware update, bootloader, factory reset, shutdown and reboot-required writes.
 - Audio-protection control/status until a public field mapping is confirmed on hardware.
 - Auracle-only behavior without a documented protocol field.
+
+## Final PA1U/mioXM Ethernet qualification
+
+Use `STABILITY_CHECKLIST.md` to qualify the current Candidate on the actual deployment host. Startup and operational feedback are user-confirmed on both models; diagnostic visibility/migration, full application/interface recovery and realistic multi-day endurance remain before Production promotion. This focused stable scope does not require implementing the later capability slices above.

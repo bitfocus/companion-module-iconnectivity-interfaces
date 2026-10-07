@@ -70,3 +70,7 @@ The AppleMIDI integration test opens local UDP sockets. Run it in an environment
 ## Authority and handoff
 
 The active `src/` implementation and `tests/` are authoritative. `src/protocol/legacy.ts` is production legacy code; `src/protocol/tng.ts` is a production foundation with partial discovery/state reads. The capability matrix distinguishes implementation from hardware validation. Keep `STATUS.md` limited to its four existing sections and update it whenever the active release target or blockers change.
+
+## GitHub persistence verification
+
+When the user's request authorizes remote publication, finish meaningful work by committing and publishing the source, tests, help and handoff/research records to a focused branch; verify the actual GitHub commit and file tree before claiming it is saved. Integrate into main only after the checks and validation required above. A cloud workspace, clean older checkout, matching version number or chat note does not prove another chat's newer edits are on GitHub. Audit the specifically named development chat/workspace when the user references work there. Report unpublished work and missing artifacts explicitly. Never claim a retained package binary is on GitHub just because its name/hash is documented. Update handoff refs when a publication or merge completes, and retain pending hardware qualification without promoting Production.

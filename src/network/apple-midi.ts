@@ -323,6 +323,8 @@ export class AppleMidiSession extends EventEmitter {
 			this.status.lastSeen = Date.now()
 			this.status.reconnectAttempts = 0
 			this.status.lastDisconnectReason = ''
+			// Start clock synchronization before connected listeners send their first MIDI.
+			if (this.options.role === 'initiator') this.sendSync(0)
 		}
 		this.emit('status', this.getStatus())
 	}

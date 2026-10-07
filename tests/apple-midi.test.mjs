@@ -173,3 +173,27 @@ function waitForStatus(session, predicate, timeout) {
 		if (predicate(session.getStatus())) listener(session.getStatus())
 	})
 }
+
+test('initiator starts synchronization before connected listeners send the first MIDI', () => {
+	const session = new AppleMidiSession({
+		role: 'initiator',
+		remoteHost: '127.0.0.1',
+		remotePort: 5004,
+		localPort: 0,
+		sessionName: 'Companion',
+	})
+	const packets = []
+	session.data = {}
+	session.sendDatagram = (_socket, packet) => packets.push(packet)
+	const peer = { address: '127.0.0.1', port: 5004 }
+	session.on('status', (status) => {
+		if (status.connected) session.send([0x90, 60, 127])
+	})
+	session.onControl(invitationPacket(0x4f4b, session.token, 1, 'Device'), peer, false)
+	assert.equal(packets.length, 0)
+	session.onControl(invitationPacket(0x4f4b, session.token, 1, 'Device'), { ...peer, port: 5005 }, true)
+	assert.equal(packets.length, 2)
+	assert.equal(packets[0].readUInt16BE(2), 0x434b)
+	assert.equal(packets[0][8], 0)
+	assert.deepEqual(parseRtpMidi(packets[1]), [0x90, 60, 127])
+})

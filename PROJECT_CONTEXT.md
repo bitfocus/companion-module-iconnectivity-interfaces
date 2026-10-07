@@ -1,6 +1,6 @@
 # Project context
 
-Last reviewed: 2026-09-17
+Last reviewed: 2026-10-05
 
 This is the primary cold-handoff document. Read `AGENTS.md` first for permanent working rules, then this file and `STATUS.md`. The private GitHub repository and its `main` branch are the authoritative known-good source baseline.
 
@@ -25,14 +25,14 @@ Success means the Candidate passes automated checks, the documented hardware tes
 ### Release state
 
 - **Production: 0.13.3.** Explicitly confirmed stable on real hardware/production on 2026-08-23. Retained archive: `releases/iconnectivity-interfaces-0.13.3.tgz`. SHA-256 observed 2026-09-11: `73178c9cdec28ff23007fb3abe098b023f6c5e84c09cd9b93e5fbbe6130ef89f`.
-- **Candidate: 0.14.13.** Built 2026-09-03. Retained archive: `releases/iconnectivity-interfaces-v0.14.13-CANDIDATE.tgz`. SHA-256 observed 2026-09-11: `ac43056985524d54d7c4f2146f8852141d07af986754deda5106b873f2e02841`.
-- `package.json` and `companion/manifest.json` both identify the working version as 0.14.13.
+- **Candidate: 0.14.22.** Built 2026-10-05 for correct active Scene initialization after restart. All 70 tests, lint, package build and package verification passed under Node 22.20.0/Yarn 4.17.0. Archive: `releases/iconnectivity-interfaces-v0.14.22-CANDIDATE.tgz`. The user confirmed the supplied PA1U Scene startup regression test; broader recovery/endurance qualification remains. Production remains 0.13.3.
+- `package.json` and `companion/manifest.json` both identify the working version as 0.14.22.
 - `releases/README.md` is authoritative for archive history, failed versions and promotion procedure.
 
 ### Working now
 
 - Self-contained AppleMIDI/RTP-MIDI initiator transport, paired control/data UDP sockets, synchronization/liveness, graceful end-session signaling, bounded reconnect behavior and multiple-instance local-port isolation.
-- PlayAUDIO1U and mioXM TNG identity and initial preset state/name discovery over the configuration session.
+- PlayAUDIO1U and mioXM TNG identity, device-confirmed preset/name refresh and notification monitoring over regular RTP, leaving Auracle’s configuration endpoint free.
 - PlayAUDIO1U initial Scene state, preset recall/tracking, Scene A/B recall/tracking and hardware-confirmed device-originated preset/Scene updates.
 - Ordinary MIDI send/receive, complete basic MIDI send actions, Generic MIDI-compatible receive variables and ordered trigger pulses.
 - MIDI Clock counting/BPM with variable-publication throttling, Active Sensing separation and a bounded 2048-message incoming queue.
@@ -42,23 +42,21 @@ Success means the Candidate passes automated checks, the documented hardware tes
 
 ### Exactly where work stopped
 
-Candidate 0.14.13 is packaged and its last recorded release check passed under Node 22.20.0/Yarn 4.17.0 with all 38 tests passing. Work stopped before completing its PA1U hardware test plan. The immediate missing evidence is:
+Candidate 0.14.21 restart bug reported 2026-10-05: the user set PA1U Scene B in Auracle, toggled the module off/on, and Companion initialized to A while the unit stayed on B. Rechecking the official TNG Rev. 1 specification established that the old query (data class 0x08, parameter 0x41) reads AudioInfo:AudioClockRestartValue, not active Scene. Earlier capture interpretation and initial-Scene hardware-validation claims were incorrect. The 0.14.18 suppression fixed live overwrites but left this incorrect startup read.
 
-1. Configure a PA1U model while it is powered off and verify Scene and mixer snapshot controls survive module and Companion restarts.
-2. Power the PA1U up and verify discovery, normal preset/Scene recalls and feedback.
-3. Deliberately select the wrong model and verify a clear mismatch error with no model-specific commands or polling sent.
-4. Continue the 0.14.12 mixer snapshot tests: recall valid snapshots, observe live changes and highlighting, verify snapshot 1 after preset recall, and establish the supported snapshot range.
-5. Validate live-monitor keepalive/reconnect and Auracle contention, plus mioXM notification behavior.
+Candidate 0.14.22 replaces the old query with GetParmVal for DeviceFeature (data class 0x03), SceneNumber (parameter 0x04), without arguments (the current work area). The documented response and live notifications share this same active-Scene field. Initial reads are transaction-matched, ignore the old audio-clock value, and retain newer live notifications when a startup reply is delayed. Missing/invalid Scene replies leave Unknown. The new query also applies to the configuration-port compatibility path. Preset refresh, startup synchronization and diagnostics behavior remain as in 0.14.21. The user confirmed the PA1U B-at-module-restart fix on 2026-10-05; wider qualification remains pending.
 
-Do not promote 0.14.13 until the user explicitly approves it after sufficient hardware/production testing.
+Next: keep the user-tested 0.14.22 package unchanged for the planned week of testing. Record separately itemized A/B repetitions and a full Companion restart, then recovery/endurance outcomes in `docs/STABILITY_CHECKLIST.md`. Optional diagnostic variables remain off for new connections and on for upgrades unless changed.
+
+Candidate 0.14.22 PA1U Scene startup verification (2026-10-05): following the supplied B-in-Auracle/module off-on regression test, the user reported testing and confirmed it works. This confirms the corrected active-Scene startup path for the reported setup. Individual A/B repetitions, full Companion restart and other live-change checks were not itemized separately. Wider recovery/endurance qualification and explicit Production promotion remain outstanding.
 
 ### Repository state at handoff
 
-- Branch: `main`.
 - Private source-of-truth repository: `https://github.com/mikecreates86/companion-module-iconnectivity`.
-- The current 0.14.13 source, tests, lockfile and handoff documentation are committed on `main`; use `git log -1` for the exact baseline commit.
-- Start future work on a focused `codex/` branch. Preserve unrelated working-tree changes and never reset them merely to obtain a clean checkout.
-- Generated output, dependency folders, private captures/exports and retained package archives are intentionally excluded. They are not required to install, build, test or continue source development from a clean clone.
+- Full source and documentation through 0.14.22 were recovered from the original development chat on 2026-10-07 and submitted on `codex/record-0.14.22` for integration into main. The previous main commit `34285fc5c1321e3850d3421db5e8f088616b9819` contained only 0.14.13. Verify the chosen GitHub ref before resuming.
+- Recovery passed all 70 tests and lint under Node 22.20.0/Yarn 4.17.0. See `docs/PERSISTENCE_AUDIT_0_14_22.md` for the complete version progression and the separate 0.15.0 branch reconciliation requirement.
+- Start future work on a focused `codex/` branch. Preserve unrelated changes; when remote publication is authorized, commit/publish and verify the remote commit before reporting work as saved.
+- Generated output, dependencies, private captures/exports and package archives are excluded. Original package hashes are historical records, not evidence that binaries are included in a GitHub clone. No replacement 0.14.22 package was created during recovery.
 
 ## 3. Requirements and constraints
 
@@ -90,8 +88,8 @@ Do not promote 0.14.13 until the user explicitly approves it after sufficient ha
 
 - Network mode is pure Node AppleMIDI/RTP-MIDI and has no external daemon dependency.
 - Companion is normally the RTP initiator. Each instance owns its own even/odd local UDP port pair.
-- The normal user RTP session stays connected. For TNG discovery, a second session normally targets control/data ports 5002/5003, reads identity and initial state, then closes so Auracle can use the endpoint.
-- Enabling live TNG monitoring intentionally retains the configuration session and may exclude Auracle because many devices allow one configuration client.
+- The normal user RTP session stays connected. The compatibility path uses a second session on control/data ports 5002/5003 and reads identity and initial state, then closes so Auracle can use the endpoint.
+- Automatic PA1U/mioXM monitoring uses the regular RTP session and leaves Auracle’s configuration port free. Only optional compatibility monitoring retains the configuration session and may exclude Auracle.
 - State is normalized before Companion actions, feedbacks, variables or triggers consume it.
 - Device capabilities gate the public control surface. TNG definitions and device replies override provisional profiles.
 - Production and Candidate are distinct, manually managed states. Promotion requires explicit user approval.
@@ -102,7 +100,7 @@ Do not promote 0.14.13 until the user explicitly approves it after sufficient ha
 
 - Center the first public beta on PlayAUDIO1U and mioXM Ethernet initiator mode.
 - Keep direct manual IPv4/port configuration as the dependable baseline.
-- Keep live preset/Scene/mixer monitoring off by default because of Auracle contention risk.
+- Make PA1U/mioXM status monitoring automatic; keep optional configuration-port compatibility monitoring off by default because it can contend with Auracle.
 - Prefer incremental, hardware-testable changes over large protocol-surface expansions.
 
 ### Temporary choices
@@ -137,13 +135,12 @@ Do not promote 0.14.13 until the user explicitly approves it after sufficient ha
 ```text
 Companion instance
   |-- persistent user RTP session --> selected device RTP port
-  |       |-- ordinary MIDI both ways
-  |       |-- liveness/reconnect status
+  |       |-- ordinary MIDI and liveness/reconnect
+  |       |-- PA1U/mioXM host session, identity and setup Scene read
+  |       `-- preset/name refresh, live notifications and keepalive
   |
-  `-- temporary TNG configuration RTP session --> usually 5002/5003
-          |-- host session and identity
-          |-- initial preset/name and PA1U Scene reads
-          `-- close for Auracle, unless live monitoring is enabled
+  `-- configuration RTP session --> usually 5002/5003
+          `-- explicit other models / advanced compatibility only
 
 protocol reply / notification / observed Program Change
   -> normalized DeviceState in main.ts
@@ -183,7 +180,7 @@ corepack yarn package
 ## 7. Important identifiers and conventions
 
 - Module package name: `iconnectivity`; Companion module ID: `iconnectivity-interfaces`.
-- Current working version: `0.14.13` in both package and manifest.
+- Current working version: `0.14.22` in both package and manifest.
 - Git branch prefix for new work: `codex/`, unless the user requests another name.
 - Capability matrix legend: **H** hardware-validated, **I** implemented but needing release validation, **P** planned/publicly documented, **N/A** not applicable.
 - Device product IDs used in active TNG mapping: mioXL 14, mioXM 15, PlayAUDIO1U 17. Legacy PlayAUDIO12 is product ID 11.
@@ -220,6 +217,8 @@ corepack yarn package
 
 ### Automated evidence
 
+- On 2026-10-05, Candidate 0.14.14 passed an immutable install, all 47 tests (including nine focused regular-RTP monitoring tests), lint, package build and package verification under Node 22.20.0/Yarn 4.17.0. The UDP integration tests ran with network-enabled execution.
+
 - On 2026-09-17, the current 0.14.13 source passed a locked dependency install, all 38 automated tests, lint, package build and package verification under Node 22.20.0/Yarn 4.17.0.
 - Tests cover legacy/TNG codec framing and malformed-packet rejection, TNG identity/state/notification messages, MIDI parsing and Generic MIDI compatibility, capability-gated surfaces, configuration visibility, upgrade migration, variables, AppleMIDI packet/session behavior, graceful shutdown and restart recovery.
 - The AppleMIDI integration tests use loopback UDP and passed during the 2026-09-17 verification in an environment that permitted local UDP sockets.
@@ -228,7 +227,7 @@ corepack yarn package
 
 - Ethernet initiator mode and reconnect path have been exercised with PA1U and mioXM.
 - PA1U and mioXM identity, online state, user MIDI and preset state/recall have been exercised.
-- PA1U Scene initial state/recall has been exercised.
+- PA1U Scene recalls/live notifications have been exercised. Earlier startup mapping was wrong; correct SceneNumber reads in 0.14.22 await B-at-restart validation.
 - On 2026-08-27, Candidate 0.14.11 promptly obtained PA1U identity and Companion updated from device-originated preset and Scene A/B changes.
 - Captures support the documented TNG active preset, preset name and initial PA1U Scene query/reply shapes summarized in `docs/PROTOCOL_NOTES.md`.
 
@@ -236,7 +235,7 @@ corepack yarn package
 
 - Candidate 0.14.13 offline model persistence and deliberate mismatch protection on real hardware.
 - PA1U mixer snapshot recall, live update, feedback, snapshot reset behavior and supported range.
-- Full live-monitor keepalive/reconnect behavior, Auracle contention and mioXM notifications.
+- Multi-day live-monitor keepalive, full application/interface recovery and firmware-specific behavior; ordinary coexistence and module-connection restart are user-confirmed on PA1U/mioXM.
 - Responder identity/configuration discovery.
 - Multi-day recovery/endurance with PA1U plus two mioXM devices.
 - USB MIDI and packaged operation on Raspberry Pi ARM64, macOS Apple Silicon and Windows x64 for the current Candidate.
@@ -250,7 +249,7 @@ corepack yarn package
 - Applying legacy configuration commands to TNG products was rejected; the protocols are not compatible.
 - Auracle-visible PA1U failover, metering and audio protection were previously overrepresented by product profiles. Those unsafe public controls are now disabled until public definitions and hardware evidence exist.
 - Failover alarm was previously used as a proxy for the active computer Scene. That was incorrect and was replaced by normalized `current_scene`.
-- Continuously retaining the TNG configuration session blocks or competes with Auracle. Default behavior now reads initial state and releases it; retention is explicit through live monitoring.
+- Continuously retaining the TNG configuration session blocks or competes with Auracle. The standard PA1U/mioXM path now avoids that endpoint; the older initial-read/optional-retention behavior remains an advanced compatibility path.
 - Failed versions 0.14.7, 0.14.8 and 0.14.9 must never be reused. See `releases/README.md` for exact failures.
 - Candidate 0.14.2 was built under unsupported Node 24.19.0 before the runtime guard was fixed and must not be treated as qualified.
 - Two different 0.14.0 archives exist. Neither is authoritative or policy-conforming; preserve both for history and do not treat `-verified` as an overwrite/replacement.
@@ -259,8 +258,8 @@ corepack yarn package
 
 ## 11. Known issues and risks
 
-- Production 0.13.3 and Candidate 0.14.13 remain distinct release states even though `main` contains the current 0.14.13 source. Git recency never promotes a release.
-- Candidate 0.14.13 is not Production and its new offline-model and mixer-snapshot scope is not hardware-qualified.
+- Production 0.13.3 and Candidate 0.14.22 remain distinct release states; `main` contains the earlier 0.14.13 baseline. Git recency never promotes a release.
+- Candidate 0.14.19 is not Production. Regular-RTP coexistence/feedback was user-confirmed on PA1U and mioXM using 0.14.18, but the cleaned defaults/migration, retained offline-model/mixer-snapshot scope and broader endurance/platform checks are not release-qualified.
 - Live monitoring can prevent Auracle from connecting. Broader keepalive/reconnect and contention behavior remains unverified.
 - Responder mode accepts MIDI sessions but lacks a complete identity/configuration discovery path.
 - Silent power-cycle/network recovery has loopback coverage but lacks multi-day three-device hardware evidence.
@@ -278,7 +277,7 @@ corepack yarn package
 - Which authoritative AudioPortID should be used for an initial PA1U mixer snapshot query?
 - How reliably do notification registration and keepalive survive interface, Companion and network restarts?
 - Exactly how does live monitoring contend with each tested Auracle X version, and is sequential/multi-client behavior device-dependent?
-- Does mioXM deliver the implemented preset notification shape under real hardware use?
+- Does mioXM preset monitoring remain accurate across extended interface/network recovery and supported firmware versions?
 - Should responder mode gain full discovery or be explicitly limited to MIDI-only/experimental for beta?
 - Which current device firmware, Companion version and OS images should define the release-validation matrix? These versions are not fully recorded in the folder.
 - Are the private captures still needed after sanitized fixtures are created, or should they remain only in a separate private research archive?
@@ -286,7 +285,7 @@ corepack yarn package
 
 ## 13. TODO and next steps
 
-1. **Recommended immediate action:** install/select Node 22.20.x with Corepack Yarn 4, run `corepack yarn test` and `corepack yarn lint`, then execute the five-step PA1U Candidate 0.14.13 hardware test scope in Section 2 without changing the package version or promoting it.
+1. **Recommended immediate action:** test Candidate 0.14.21 using `docs/ETHERNET_COEXISTENCE_TEST.md` and record regular-RTP discovery and live-feedback results with Auracle on Ethernet. Continue the retained offline-model/mixer validation afterward. Do not promote the Candidate without explicit user approval.
 2. Record each hardware result in `STATUS.md`, `docs/CAPABILITY_MATRIX.md` and `releases/README.md` as appropriate. Separate PA1U preset/Scene notification evidence from still-unverified mixer, keepalive, Auracle and mioXM behavior.
 3. Decide whether responder mode will receive full discovery or an explicit MIDI-only/experimental limitation; implement and test the chosen boundary.
 4. Run multi-day PA1U plus two-mioXM endurance tests across interface, Companion and network restarts, high MIDI/Clock load and Auracle coexistence.
