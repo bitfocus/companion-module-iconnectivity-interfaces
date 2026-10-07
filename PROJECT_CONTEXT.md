@@ -53,7 +53,7 @@ Candidate 0.14.22 PA1U Scene startup verification (2026-10-05): following the su
 ### Repository state at handoff
 
 - Private source-of-truth repository: `https://github.com/mikecreates86/companion-module-iconnectivity`.
-- Full source and documentation through 0.14.22 were recovered from the original development chat on 2026-10-07 and submitted on `codex/record-0.14.22` for integration into main. The previous main commit `34285fc5c1321e3850d3421db5e8f088616b9819` contained only 0.14.13. Verify the chosen GitHub ref before resuming.
+- Resume source development from GitHub `main`: full source and documentation through 0.14.22 were recovered and merged on 2026-10-07 through [PR #2](https://github.com/mikecreates86/companion-module-iconnectivity/pull/2), merge commit `06cccb3c779e84c6d81d51c08245a00956dfe332`. GitHub Test/Lint jobs passed and the merged tree matched the validated recovery tree. The previous main commit `34285fc5c1321e3850d3421db5e8f088616b9819` contained only 0.14.13.
 - Recovery passed all 70 tests and lint under Node 22.20.0/Yarn 4.17.0. See `docs/PERSISTENCE_AUDIT_0_14_22.md` for the complete version progression and the separate 0.15.0 branch reconciliation requirement.
 - Start future work on a focused `codex/` branch. Preserve unrelated changes; when remote publication is authorized, commit/publish and verify the remote commit before reporting work as saved.
 - Generated output, dependencies, private captures/exports and package archives are excluded. Original package hashes are historical records, not evidence that binaries are included in a GitHub clone. No replacement 0.14.22 package was created during recovery.
