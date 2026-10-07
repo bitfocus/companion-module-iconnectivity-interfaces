@@ -13,6 +13,7 @@
 
 ## Recently Completed
 
+- Candidate 0.15.1 Auracle responsiveness check (2026-10-07): the user noticed a short delay before Auracle showed the active Scene when opening the interface. With diagnostics enabled, Companion's internal command count rose only from 16 to 18–20 during Auracle's load, the normal background rate rather than extra traffic. The user then reported no measurable difference in Auracle responsiveness between 0.15.1 and 0.14.22. Treated as normal Auracle/interface behaviour; no change made.
 - Candidate 0.15.1 first hardware result (2026-10-07): the user reported that 0.15.1 connects quickly and the interface still appears in Auracle while the module runs, so the 0.15.0 Auracle regression is not present. Device model, timing, preset/Scene feedback, offline/reconfiguration status, Refresh and the preset buttons were not reported separately and remain in the 0.15.1 testing scope.
 
 - Candidate 0.14.22 PA1U Scene startup verification (2026-10-05): following the supplied B-in-Auracle/module off-on regression test, the user reported testing and confirmed it works. This confirms the corrected active-Scene startup path for the reported setup. Individual A/B repetitions, full Companion restart and other live-change checks were not itemized separately. Wider recovery/endurance qualification and explicit Production promotion remain outstanding.
