@@ -25,9 +25,10 @@ Success means the Candidate passes automated checks, the documented hardware tes
 ### Release state
 
 - **Production: 0.13.3.** Explicitly confirmed stable on real hardware/production on 2026-08-23. Retained archive: `releases/iconnectivity-interfaces-0.13.3.tgz`. SHA-256 observed 2026-09-11: `73178c9cdec28ff23007fb3abe098b023f6c5e84c09cd9b93e5fbbe6130ef89f`.
-- **Candidate: 0.14.14.** Built 2026-10-07 from the pre-public audit fixes. Retained archive: `releases/iconnectivity-interfaces-v0.14.14-CANDIDATE.tgz`. SHA-256: `f213007f22e29b3a768b1c84babafd8b12a52132ca016f237a55854ba2eae466`. See `STATUS.md` for its hardware testing scope.
+- **Candidate: 0.15.0.** Built 2026-10-07 from the pre-public audit fixes. Retained archive: `releases/iconnectivity-interfaces-v0.15.0-CANDIDATE.tgz`. SHA-256: `8463ce0d9cb99809a86031c30e2a8977471a15b106cca23b69ef5863a4d17754`.
+- **Discarded: 0.14.14.** Same source; Companion refused it because a v0.14.14 already existed there. Never reuse it. See `STATUS.md` for its hardware testing scope.
 - **Prior Candidate: 0.14.13.** Built 2026-09-03; superseded before hardware testing. Retained archive: `releases/iconnectivity-interfaces-v0.14.13-CANDIDATE.tgz`. SHA-256 observed 2026-09-11: `ac43056985524d54d7c4f2146f8852141d07af986754deda5106b873f2e02841`.
-- `package.json` and `companion/manifest.json` both identify the working version as 0.14.14.
+- `package.json` and `companion/manifest.json` both identify the working version as 0.15.0.
 - `releases/README.md` is authoritative for archive history, failed versions and promotion procedure.
 
 ### Working now
@@ -184,7 +185,7 @@ corepack yarn package
 ## 7. Important identifiers and conventions
 
 - Module package name: `iconnectivity`; Companion module ID: `iconnectivity-interfaces`.
-- Current working version: `0.14.14` in both package and manifest.
+- Current working version: `0.15.0` in both package and manifest.
 - Git branch prefix for new work: `codex/`, unless the user requests another name.
 - Capability matrix legend: **H** hardware-validated, **I** implemented but needing release validation, **P** planned/publicly documented, **N/A** not applicable.
 - Device product IDs used in active TNG mapping: mioXL 14, mioXM 15, PlayAUDIO1U 17. Legacy PlayAUDIO12 is product ID 11.
@@ -252,7 +253,7 @@ corepack yarn package
 - Auracle-visible PA1U failover, metering and audio protection were previously overrepresented by product profiles. Those unsafe public controls are now disabled until public definitions and hardware evidence exist.
 - Failover alarm was previously used as a proxy for the active computer Scene. That was incorrect and was replaced by normalized `current_scene`.
 - Continuously retaining the TNG configuration session blocks or competes with Auracle. Default behavior now reads initial state and releases it; retention is explicit through live monitoring.
-- Failed versions 0.14.7, 0.14.8 and 0.14.9 must never be reused. See `releases/README.md` for exact failures.
+- Failed versions 0.14.7, 0.14.8, 0.14.9 and 0.14.14 must never be reused. See `releases/README.md` for exact failures.
 - Candidate 0.14.2 was built under unsupported Node 24.19.0 before the runtime guard was fixed and must not be treated as qualified.
 - Two different 0.14.0 archives exist. Neither is authoritative or policy-conforming; preserve both for history and do not treat `-verified` as an overwrite/replacement.
 - Unbounded or per-pulse Companion Clock publication was too costly. Clock pulses are fully counted but published at a controlled interval, and identical normal message descriptions do not force redundant state publication.
