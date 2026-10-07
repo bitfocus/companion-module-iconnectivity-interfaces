@@ -17,8 +17,12 @@ The 0.14.22 source, tests, help, metadata and research/release notes were recove
 by applying all recorded file edits in order to that same 0.14.13 baseline,
 including the original formatting steps. The recovery did not replay hardware
 commands, package builds or network probes. The resulting source was verified
-again on 2026-10-07. It is submitted on `codex/record-0.14.22` for integration
-into main. A published commit and matching GitHub tree, not a cloud workspace or
+again on 2026-10-07. It was published on `codex/record-0.14.22` and merged into main through
+[PR #2](https://github.com/mikecreates86/companion-module-iconnectivity/pull/2) on 2026-10-07. Merge commit:
+`06cccb3c779e84c6d81d51c08245a00956dfe332`. GitHub Test and Lint jobs passed. The main
+comparison against recovery commit `e45caba23531424200f5efeeb3854b68ae42d65d`
+returned no file differences. The GitHub source tree
+`68bd26c7cc8bf7fc3bcf5779ee8567143c20c100` matched the checked local tree. A published commit and matching GitHub tree, not a cloud workspace or
 chat message, establish source persistence.
 
 ## Change progression
