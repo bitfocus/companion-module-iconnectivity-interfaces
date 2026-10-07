@@ -185,6 +185,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 	private lifecycleGeneration = 0
 	private detectedProfile?: CapabilityProfile
 	private deviceModelMismatch = false
+	private deviceStale = false
 
 	async init(config: ModuleConfig): Promise<void> {
 		this.config = config
@@ -239,8 +240,12 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		this.detectedProfile = profile
 		const expected = profileForExpectedDevice(this.config.expectedDevice)
 		this.deviceModelMismatch = !!expected && expected.name !== profile.name
-		this.state.profile = expected ?? profile
-		this.updateCapabilitySurface()
+		const next = expected ?? profile
+		const changed = this.state.profile?.name !== next.name || this.state.profile?.protocol !== next.protocol
+		this.state.profile = next
+		// Every TNG reply and keepalive passes through here; only rebuild the
+		// Companion surface when the effective profile actually changes.
+		if (changed) this.updateCapabilitySurface()
 		if (this.deviceModelMismatch) {
 			this.updateStatus(InstanceStatus.BadConfig, `Configured for ${expected?.name}, but detected ${profile.name}`)
 			return false
@@ -286,6 +291,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		this.state.address = { productId: 0, serial: 0 }
 		this.detectedProfile = undefined
 		this.deviceModelMismatch = false
+		this.deviceStale = false
 		this.state.profile = profileForExpectedDevice(this.config.expectedDevice)
 		this.state.identityStatus = 'Waiting for device'
 		this.state.rtpPeerAddress = ''
@@ -300,6 +306,16 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 			this.midiClockIntervals.length = 0
 		}
 		this.updateCapabilitySurface()
+		for (const [selector, label] of [
+			['scene', 'Scene A/B'],
+			['mixerSnapshot', 'mixer snapshot'],
+		] as const) {
+			const conflict = this.selectorChannelConflict(selector)
+			if (conflict) this.log('warn', `The ${label} channel is the same as ${conflict}; its recall action is disabled`)
+		}
+		// Publish the reset state (including feedbacks) immediately. Otherwise a
+		// reconfigured instance keeps showing the previous connection as online.
+		this.publishState()
 		try {
 			if ((this.config.transport ?? 'rtp-midi') === 'rtp-midi') {
 				if (!isIPv4(this.config.host ?? '')) {
@@ -326,6 +342,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 					sessionName: this.config.sessionName || 'Companion iConnectivity',
 				})
 				this.networkTransport = transport
+				this.updateNetworkStatus()
 				transport.on('midi', (bytes: number[]) => {
 					if (this.networkTransport === transport && generation === this.lifecycleGeneration)
 						this.receiveUserMidi(bytes)
@@ -395,6 +412,14 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 				if (status.lastDisconnectReason === 'Peer rejected the session')
 					this.log('warn', 'The device rejected the configuration RTP-MIDI session; it may still be in use')
 			}
+			if (!status.connected && this.liveStateMonitoringActive) {
+				// The device forgets notification registrations with the session.
+				// Re-register after the automatic reconnect and rediscovery.
+				if (this.liveStateKeepaliveTimer) clearInterval(this.liveStateKeepaliveTimer)
+				this.liveStateKeepaliveTimer = undefined
+				this.liveStateMonitoringActive = false
+				this.log('warn', 'Live device monitoring session lost; it will re-register after reconnecting')
+			}
 			if (connectionChanged) this.updateNetworkStatus()
 			if (justConnected) {
 				if (this.configConnectTimeout) clearTimeout(this.configConnectTimeout)
@@ -457,7 +482,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 	}
 
 	private requestInitialOperationalState(): void {
-		if (!this.configNetworkTransport || !this.state.profile) {
+		if ((!this.configNetworkTransport && !this.usbTransport) || !this.state.profile) {
 			this.releaseConfigurationTransport()
 			return
 		}
@@ -726,14 +751,20 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 			if (this.state.profile?.mixerSnapshots) this.state.currentMixerSnapshot = 1
 			observed = true
 		}
-		if (this.config.sceneChannel > 0 && channel === this.config.sceneChannel && this.state.profile?.scenes) {
+		if (
+			this.config.sceneChannel > 0 &&
+			channel === this.config.sceneChannel &&
+			this.state.profile?.scenes &&
+			!this.selectorChannelConflict('scene')
+		) {
 			this.state.currentScene = program === 1 ? 'A' : program === 2 ? 'B' : String(program)
 			observed = true
 		}
 		if (
 			this.config.mixerSnapshotChannel > 0 &&
 			channel === this.config.mixerSnapshotChannel &&
-			this.state.profile?.mixerSnapshots
+			this.state.profile?.mixerSnapshots &&
+			!this.selectorChannelConflict('mixerSnapshot')
 		) {
 			this.state.currentMixerSnapshot = program
 			observed = true
@@ -749,9 +780,22 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		this.log('info', `Recall preset ${value}: sending ${formatMidi(bytes)} on RTP-MIDI channel ${channel}`)
 		this.sendMidi(bytes)
 		this.state.currentPreset = value
+		// The previous preset's name no longer applies; show "Preset N" until the
+		// device reports the new name.
+		this.state.currentPresetName = ''
 		if (this.state.profile?.mixerSnapshots) this.state.currentMixerSnapshot = 1
 		this.state.lastRecallAt = Date.now()
 		this.publishState(false)
+	}
+
+	/** Describes a selector channel that would also trigger another configured selector. */
+	selectorChannelConflict(selector: 'scene' | 'mixerSnapshot'): string | undefined {
+		const channel = selector === 'scene' ? this.config.sceneChannel : this.config.mixerSnapshotChannel
+		if (!channel) return undefined
+		if (channel === (this.config.presetChannel || 1)) return `the preset recall channel (${channel})`
+		if (selector === 'mixerSnapshot' && channel === this.config.sceneChannel)
+			return `the Scene A/B channel (${channel})`
+		return undefined
 	}
 
 	recallScene(scene: string): void {
@@ -759,6 +803,8 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		if (!this.state.profile?.scenes) throw new Error('The detected device does not support Scene A/B')
 		if (!this.config.sceneChannel)
 			throw new Error('Configure a PlayAUDIO Scene A/B MIDI channel in connection settings')
+		const conflict = this.selectorChannelConflict('scene')
+		if (conflict) throw new Error(`The Scene A/B channel is the same as ${conflict}; choose a different channel`)
 		const normalized = scene === 'B' ? 'B' : 'A'
 		const channel = Math.max(1, Math.min(16, this.config.sceneChannel))
 		const bytes = programChangeBytes(channel, normalized === 'A' ? 1 : 2)
@@ -774,6 +820,8 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		if (!this.state.profile?.mixerSnapshots) throw new Error('The detected device does not support mixer snapshots')
 		if (!this.config.mixerSnapshotChannel)
 			throw new Error('Configure a PlayAUDIO mixer snapshot MIDI channel in connection settings')
+		const conflict = this.selectorChannelConflict('mixerSnapshot')
+		if (conflict) throw new Error(`The mixer snapshot channel is the same as ${conflict}; choose a different channel`)
 		const value = Math.max(1, Math.min(128, Math.round(snapshot)))
 		const channel = Math.max(1, Math.min(16, this.config.mixerSnapshotChannel))
 		const bytes = programChangeBytes(channel, value)
@@ -869,12 +917,21 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 			Date.now() - this.identityAttemptAt >= 5000
 		)
 			return this.discover(true)
-		if (Date.now() - this.state.lastSeen > Math.max(4000, this.config.pollInterval * 4)) {
-			this.state.online = false
-			this.updateStatus(InstanceStatus.ConnectionFailure, 'Device stopped responding')
-			this.publishState()
-			if (!this.networkTransport) this.discover()
-			return
+		// RTP-MIDI liveness is owned by the AppleMIDI session timeout, which reports
+		// through updateNetworkStatus. Only USB legacy devices are polled, so only
+		// they can be judged stale from missing replies.
+		if (!this.networkTransport && this.state.profile?.protocol === 'legacy') {
+			const staleAfter = Math.max(4000, (this.config.pollInterval || 1000) * 4)
+			if (Date.now() - this.state.lastSeen > staleAfter) {
+				if (!this.deviceStale) {
+					this.deviceStale = true
+					this.state.online = false
+					this.updateStatus(InstanceStatus.ConnectionFailure, 'Device stopped responding')
+					this.publishState()
+				}
+				this.discover()
+				return
+			}
 		}
 		if (this.state.profile?.protocol === 'legacy' && this.state.profile.failover)
 			this.send(Commands.getHardwareValue, [3, 0])
@@ -907,11 +964,32 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 	}
 	requestRefresh(): void {
 		this.requireMatchingDevice()
+		if (this.state.profile?.protocol !== 'legacy' || !this.state.address.productId) {
+			this.resyncDeviceState()
+			return
+		}
 		this.send(Commands.getCommandList)
 		this.send(Commands.getInfo, [5])
 		this.send(Commands.getSnapshotGlobal)
 		if (this.state.profile?.failover) this.send(Commands.getHardwareValue, [3, 0])
 	}
+	/**
+	 * Re-reads TNG identity, preset/name and Scene. Over Ethernet this briefly
+	 * reopens the configuration session and then releases it for Auracle again,
+	 * unless live monitoring is retaining it.
+	 */
+	private resyncDeviceState(): void {
+		this.identityAttemptAt = 0
+		if (!this.networkTransport) {
+			this.discover(true)
+			return
+		}
+		if (!this.networkConnected) throw new Error('The interface RTP-MIDI session is not connected')
+		this.configRetryAt = 0
+		if (!this.configNetworkTransport) void this.openConfigurationTransport()
+		else if (this.configNetworkConnected) this.discover(true)
+	}
+
 	u14(value: number): number[] {
 		return [(value >> 7) & 0x7f, value & 0x7f]
 	}
@@ -931,6 +1009,10 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		this.state.lastDeviceResponseIn = describeMidi(bytes).raw
 		this.state.online = true
 		this.state.lastSeen = Date.now()
+		if (this.deviceStale) {
+			this.deviceStale = false
+			if (!this.deviceModelMismatch) this.updateStatus(InstanceStatus.Ok, `${this.state.name} connected`)
+		}
 		this.state.address = { productId: message.productId, serial: message.serial }
 		if (message.command === Commands.retDevice) {
 			this.state.protocolVersion = message.data[0] ?? 0
@@ -945,6 +1027,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 				: 'Legacy identity received'
 			if (matches) this.updateStatus(InstanceStatus.Ok, `${detectedProfile.name} connected`)
 			if (!matches) {
+				this.releaseConfigurationTransport()
 				this.publishState()
 				return
 			} else if (knownTngProduct) {
@@ -991,6 +1074,8 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		this.state.address = { productId: message.productId, serial: message.serial }
 		const detectedProfile = profileForTngProduct(message.productId)
 		if (!this.applyDetectedProfile(detectedProfile)) {
+			// Never hold the shared configuration session for a mismatched device.
+			this.releaseConfigurationTransport()
 			this.publishState()
 			return
 		}

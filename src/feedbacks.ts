@@ -5,6 +5,7 @@ export type FeedbacksSchema = {
 	online: { type: 'boolean'; options: Record<string, never> }
 	failover_armed: { type: 'boolean'; options: Record<string, never> }
 	failover_alarm: { type: 'boolean'; options: Record<string, never> }
+	current_preset: { type: 'boolean'; options: { preset: number } }
 	current_scene: { type: 'boolean'; options: { scene: string } }
 	current_mixer_snapshot: { type: 'boolean'; options: { snapshot: number } }
 	host_healthy: { type: 'boolean'; options: { host: string; minimum: number } }
@@ -72,6 +73,18 @@ export function UpdateFeedbacks(self: ModuleInstance): void {
 					},
 				}
 			: {}),
+		...(self.state.profile?.presets
+			? {
+					current_preset: {
+						name: 'Current preset',
+						description: 'Observed or last-recalled preset. Enable live monitoring to follow front-panel changes.',
+						type: 'boolean',
+						defaultStyle: { bgcolor: 0x0055aa, color: 0xffffff },
+						options: [{ type: 'number', id: 'preset', label: 'Preset (1-128)', default: 1, min: 1, max: 128 }],
+						callback: (event) => self.state.currentPreset === Number(event.options.preset),
+					},
+				}
+			: {}),
 		...(self.state.profile?.scenes
 			? {
 					current_scene: {
@@ -110,7 +123,7 @@ export function UpdateFeedbacks(self: ModuleInstance): void {
 								max: 128,
 							},
 						],
-						callback: (event) => self.state.currentMixerSnapshot === event.options.snapshot,
+						callback: (event) => self.state.currentMixerSnapshot === Number(event.options.snapshot),
 					},
 				}
 			: {}),

@@ -7,7 +7,7 @@ const baseConfig = await generateEslintConfig({
 export default [
 	...baseConfig,
 	{
-		files: ['tests/*.mjs'],
+		files: ['tests/**/*.mjs'],
 		rules: { 'n/no-unpublished-import': 'off', 'n/no-missing-import': 'off' },
 	},
 ]

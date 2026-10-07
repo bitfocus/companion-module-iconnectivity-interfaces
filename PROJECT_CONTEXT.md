@@ -25,8 +25,9 @@ Success means the Candidate passes automated checks, the documented hardware tes
 ### Release state
 
 - **Production: 0.13.3.** Explicitly confirmed stable on real hardware/production on 2026-08-23. Retained archive: `releases/iconnectivity-interfaces-0.13.3.tgz`. SHA-256 observed 2026-09-11: `73178c9cdec28ff23007fb3abe098b023f6c5e84c09cd9b93e5fbbe6130ef89f`.
-- **Candidate: 0.14.13.** Built 2026-09-03. Retained archive: `releases/iconnectivity-interfaces-v0.14.13-CANDIDATE.tgz`. SHA-256 observed 2026-09-11: `ac43056985524d54d7c4f2146f8852141d07af986754deda5106b873f2e02841`.
-- `package.json` and `companion/manifest.json` both identify the working version as 0.14.13.
+- **Candidate: 0.14.14.** Built 2026-10-07 from the pre-public audit fixes. Retained archive: `releases/iconnectivity-interfaces-v0.14.14-CANDIDATE.tgz`. SHA-256: `f213007f22e29b3a768b1c84babafd8b12a52132ca016f237a55854ba2eae466`. See `STATUS.md` for its hardware testing scope.
+- **Prior Candidate: 0.14.13.** Built 2026-09-03; superseded before hardware testing. Retained archive: `releases/iconnectivity-interfaces-v0.14.13-CANDIDATE.tgz`. SHA-256 observed 2026-09-11: `ac43056985524d54d7c4f2146f8852141d07af986754deda5106b873f2e02841`.
+- `package.json` and `companion/manifest.json` both identify the working version as 0.14.14.
 - `releases/README.md` is authoritative for archive history, failed versions and promotion procedure.
 
 ### Working now
@@ -183,7 +184,7 @@ corepack yarn package
 ## 7. Important identifiers and conventions
 
 - Module package name: `iconnectivity`; Companion module ID: `iconnectivity-interfaces`.
-- Current working version: `0.14.13` in both package and manifest.
+- Current working version: `0.14.14` in both package and manifest.
 - Git branch prefix for new work: `codex/`, unless the user requests another name.
 - Capability matrix legend: **H** hardware-validated, **I** implemented but needing release validation, **P** planned/publicly documented, **N/A** not applicable.
 - Device product IDs used in active TNG mapping: mioXL 14, mioXM 15, PlayAUDIO1U 17. Legacy PlayAUDIO12 is product ID 11.

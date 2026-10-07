@@ -28,7 +28,7 @@ export const UpgradeScripts: CompanionStaticUpgradeScript<ModuleConfig>[] = [
 				? {
 						...config,
 						expectedDevice: config.expectedDevice ?? 'auto',
-						configRemotePort: 5002,
+						configRemotePort: config.configRemotePort || 5002,
 						configLocalPort: config.configLocalPort || 0,
 						presetChannel: config.presetChannel || 1,
 						sceneChannel: config.sceneChannel ?? 0,
