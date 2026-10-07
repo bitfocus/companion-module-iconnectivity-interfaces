@@ -21,8 +21,10 @@ export type ModuleConfig = {
 	sceneChannel: number
 	mixerSnapshotChannel: number
 	advanced: boolean
+	showDiagnostics: boolean
 	receiveMidiClock: boolean
 	livePresetSceneMonitoring: boolean
+	statusConnection: 'automatic' | 'configuration'
 }
 
 export function GetConfigFields(): SomeCompanionConfigField[] {
@@ -33,10 +35,11 @@ export function GetConfigFields(): SomeCompanionConfigField[] {
 	const usbVisible = "$(options:transport) == 'usb-midi'"
 	const initiatorVisible = "$(options:transport) == 'rtp-midi' && $(options:role) == 'initiator'"
 	const responderVisible = "$(options:transport) == 'rtp-midi' && $(options:role) == 'responder'"
-	const advancedNetworkVisible = "$(options:transport) == 'rtp-midi' && $(options:advanced) == true"
 	const advancedInitiatorVisible =
 		"$(options:transport) == 'rtp-midi' && $(options:role) == 'initiator' && $(options:advanced) == true"
 	const advancedVisible = '$(options:advanced) == true'
+	const configurationStatusVisible =
+		"$(options:transport) == 'rtp-midi' && $(options:role) == 'initiator' && $(options:advanced) == true && ($(options:statusConnection) == 'configuration' || $(options:expectedDevice) == 'playaudio12' || $(options:expectedDevice) == 'mioxl')"
 	const midiChannels: DropdownChoice[] = Array.from({ length: 16 }, (_, index) => ({
 		id: index + 1,
 		label: `Channel ${index + 1}`,
@@ -187,22 +190,22 @@ export function GetConfigFields(): SomeCompanionConfigField[] {
 		},
 		{
 			type: 'checkbox',
-			id: 'livePresetSceneMonitoring',
-			label: 'Monitor device preset/Scene/mixer changes',
-			tooltip:
-				'Immediately updates Companion when a preset, Scene or mixer snapshot is changed from the device or another app. This keeps the configuration RTP session connected, so Auracle may be unable to connect at the same time.',
-			width: 12,
-			default: false,
-			disableAutoExpression: true,
-			isVisibleExpression: initiatorVisible,
-		},
-		{
-			type: 'checkbox',
 			id: 'advanced',
 			label: 'Show advanced settings',
 			width: 12,
 			default: false,
 			disableAutoExpression: true,
+		},
+		{
+			type: 'checkbox',
+			id: 'showDiagnostics',
+			label: 'Show diagnostic variables',
+			tooltip:
+				'Expose troubleshooting counters, internal messages, connection details and capability flags. Monitoring continues when these variables are hidden. Existing connections keep them enabled during upgrade to preserve references.',
+			width: 12,
+			default: false,
+			disableAutoExpression: true,
+			isVisibleExpression: advancedVisible,
 		},
 		{
 			type: 'number',
@@ -216,6 +219,32 @@ export function GetConfigFields(): SomeCompanionConfigField[] {
 			isVisibleExpression: advancedInitiatorVisible,
 		},
 		{
+			type: 'dropdown',
+			id: 'statusConnection',
+			label: 'Device status connection',
+			tooltip:
+				'Automatic monitors PlayAUDIO1U, mioXM and auto-detected TNG devices through the regular RTP port, keeping Auracle available. Explicit PlayAUDIO12 and mioXL selections use their existing configuration connection. Choose Configuration port only for compatibility troubleshooting.',
+			width: 12,
+			default: 'automatic',
+			disableAutoExpression: true,
+			isVisibleExpression: advancedInitiatorVisible,
+			choices: [
+				{ id: 'automatic', label: 'Automatic' },
+				{ id: 'configuration', label: 'Configuration port (compatibility)' },
+			],
+		},
+		{
+			type: 'checkbox',
+			id: 'livePresetSceneMonitoring',
+			label: 'Monitor changes through configuration port',
+			tooltip:
+				'Keeps the configuration session connected for live TNG notifications. This compatibility method may prevent Auracle from connecting over Ethernet. Regular-RTP monitoring is automatic and does not use this setting.',
+			width: 12,
+			default: false,
+			disableAutoExpression: true,
+			isVisibleExpression: configurationStatusVisible,
+		},
+		{
 			type: 'number',
 			id: 'configRemotePort',
 			label: 'Device discovery/configuration port',
@@ -224,7 +253,7 @@ export function GetConfigFields(): SomeCompanionConfigField[] {
 			default: 5002,
 			min: 1,
 			max: 65534,
-			isVisibleExpression: advancedNetworkVisible,
+			isVisibleExpression: configurationStatusVisible,
 		},
 		{
 			type: 'number',
@@ -235,7 +264,7 @@ export function GetConfigFields(): SomeCompanionConfigField[] {
 			default: 0,
 			min: 0,
 			max: 65534,
-			isVisibleExpression: advancedNetworkVisible,
+			isVisibleExpression: configurationStatusVisible,
 		},
 		{
 			type: 'number',

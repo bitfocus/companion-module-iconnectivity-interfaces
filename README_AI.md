@@ -29,7 +29,8 @@ Bitfocus Companion module for monitoring and controlling iConnectivity PlayAUDIO
 - Network mode is self-contained and does not require `rtpmidid`, ALSA network-MIDI setup or Apple Network MIDI.
 - Companion is normally the RTP initiator. Each instance owns independent local UDP port pairs and reconnects after either endpoint restarts.
 - Build, test and package commands require Node 22.20+ and Yarn 4. The disposable compiler output is `dist/`; retained testable Companion packages belong only in `releases/` and follow the two-tier procedure in `releases/README.md`.
-- The normal user RTP session remains connected for MIDI and liveness. On TNG devices, the configuration session on 5002/5003 is opened briefly for identity and initial preset/scene reads, then released for Auracle.
+- Candidate 0.14.19 makes regular-RTP discovery and live monitoring automatic for PA1U/mioXM and Auto-detect Ethernet initiators. Preset/name reads reconcile state every three seconds; presets require device confirmation. The configuration port stays free for Auracle.
+- Explicit PlayAUDIO12/mioXL selections and the advanced configuration-port override preserve the older status path. Its optional monitoring can contend with Auracle and retains a scoped warning.
 - Preset and PlayAUDIO Scene recalls use one-based MIDI Program Change values on channels configured beforehand with iConnectivity Preset Selector.
 - Incoming MIDI Clock is separated and rate-limited so it cannot overwhelm Companion trigger variables.
 - Device state must be normalized before actions, variables or feedbacks consume it. Unsupported controls must be hidden or rejected clearly.
@@ -38,3 +39,9 @@ Bitfocus Companion module for monitoring and controlling iConnectivity PlayAUDIO
 ## Current boundary
 
 PlayAUDIO1U and mioXM identity, online state, user MIDI, preset state/recall and PlayAUDIO1U Scene state/recall have been exercised on hardware. Full TNG routing, failover, meters, audio controls, notifications and RTP configuration are unfinished. PlayAUDIO12, mioXL, legacy mio, USB MIDI, responder mode and non-Linux platforms require release-level hardware validation. See `STATUS.md` first, then `docs/CAPABILITY_MATRIX.md` only when capability scope matters.
+
+## Current handoff (2026-10-07)
+
+Candidate 0.14.22 includes automatic PA1U/mioXM regular-RTP monitoring alongside Auracle, device-confirmed preset/name refresh every three seconds, faster startup, optional diagnostic variables and the corrected DeviceFeature:SceneNumber startup read. The user confirmed the PA1U B-at-module-restart fix on 2026-10-05 and chose to test this same package through the week. Production remains 0.13.3. Wider recovery/endurance and explicit promotion remain outstanding.
+
+The full source and original research/release records were recovered into `codex/record-0.14.22` for integration into GitHub main. All 70 tests and lint passed again under Node 22.20.0/Yarn 4.17.0. Verify the selected remote ref contains 0.14.22 before resuming. Read `docs/PERSISTENCE_AUDIT_0_14_22.md` for the complete 0.14.14–0.14.22 progression, original package availability and the independent 0.15.0 branch. Follow `docs/STABILITY_CHECKLIST.md` for remaining tests. Do not rebuild or replace the user's tested 0.14.22 archive.

@@ -4,6 +4,7 @@ const PREFIX = [0xf0, 0x00, 0x01, 0x73, 0x7d]
 
 export const TngMessageClass = {
 	hostSession: 0x01,
+	ack: 0x40,
 	getParameterValue: 0x03,
 	deviceSession: 0x41,
 	returnParameterValue: 0x43,
@@ -16,7 +17,6 @@ export const TngDataClass = {
 	sessionInfo: 0x01,
 	deviceInfo: 0x02,
 	presetInfo: 0x03,
-	sceneInfo: 0x08,
 	audioPortInfo: 0x09,
 } as const
 
@@ -104,12 +104,17 @@ export function pingMessage(address: TngAddress, sessionId: number, transactionI
 	return buildTngMessage(address, sessionId, transactionId, [])
 }
 
-export function getActivePresetMessage(address: TngAddress, transactionId: number): number[] {
-	return buildTngMessage(address, 0, transactionId, [0x03, 0x03, 0x01, 0x04, 0x01, 0x01, 0x01])
+export function getActivePresetMessage(address: TngAddress, transactionId: number, sessionId = 0): number[] {
+	return buildTngMessage(address, sessionId, transactionId, [0x03, 0x03, 0x01, 0x04, 0x01, 0x01, 0x01])
 }
 
-export function getPresetNameMessage(address: TngAddress, transactionId: number, preset: number): number[] {
-	return buildTngMessage(address, 0, transactionId, [
+export function getPresetNameMessage(
+	address: TngAddress,
+	transactionId: number,
+	preset: number,
+	sessionId = 0,
+): number[] {
+	return buildTngMessage(address, sessionId, transactionId, [
 		0x03,
 		0x03,
 		0x02,
@@ -125,13 +130,9 @@ export function getPresetNameMessage(address: TngAddress, transactionId: number,
 	])
 }
 
-export function getActiveSceneMessage(address: TngAddress, transactionId: number): number[] {
-	return buildTngMessage(
-		address,
-		0,
-		transactionId,
-		[0x03, 0x08, 0x02, 0x05, 0x04, 0x01, 0x13, 0x7f, 0x04, 0x01, 0x01, 0x41],
-	)
+export function getActiveSceneMessage(address: TngAddress, transactionId: number, sessionId = 0): number[] {
+	// DeviceFeature:SceneNumber is the active Scene in the work area (no argument required).
+	return buildTngMessage(address, sessionId, transactionId, [0x03, 0x03, 0x01, 0x04, 0x01, 0x01, 0x04])
 }
 
 function parseParameters(content: readonly number[]): Map<number, number[]> {

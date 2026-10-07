@@ -43,4 +43,24 @@ export const UpgradeScripts: CompanionStaticUpgradeScript<ModuleConfig>[] = [
 			updatedFeedbacks: [],
 		}
 	},
+	(
+		_context: CompanionUpgradeContext<ModuleConfig>,
+		props: CompanionStaticUpgradeProps<ModuleConfig, undefined>,
+	): CompanionStaticUpgradeResult<ModuleConfig, undefined> => {
+		const config: (ModuleConfig & { regularRtpMonitoring?: boolean }) | null = props.config
+		if (!config || (config.statusConnection !== undefined && !('regularRtpMonitoring' in config)))
+			return { updatedConfig: null, updatedActions: [], updatedFeedbacks: [] }
+		const updatedConfig = { ...config, statusConnection: config.statusConnection ?? ('automatic' as const) }
+		delete updatedConfig.regularRtpMonitoring
+		return { updatedConfig, updatedActions: [], updatedFeedbacks: [] }
+	},
+	(
+		_context: CompanionUpgradeContext<ModuleConfig>,
+		props: CompanionStaticUpgradeProps<ModuleConfig, undefined>,
+	): CompanionStaticUpgradeResult<ModuleConfig, undefined> => ({
+		updatedConfig:
+			props.config && props.config.showDiagnostics === undefined ? { ...props.config, showDiagnostics: true } : null,
+		updatedActions: [],
+		updatedFeedbacks: [],
+	}),
 ]

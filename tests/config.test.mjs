@@ -30,7 +30,12 @@ test('configuration separates Ethernet roles and keeps MIDI options together', a
 	)
 	assert.match(source, /id: 'responderPort',[\s\S]*?isVisibleExpression: responderVisible/)
 	assert.match(source, /id: 'receiveMidiClock'[\s\S]*?id: 'advanced'/)
-	assert.match(source, /id: 'livePresetSceneMonitoring'[\s\S]*?default: false/)
+	assert.match(source, /id: 'livePresetSceneMonitoring'[\s\S]*?isVisibleExpression: configurationStatusVisible/)
+	assert.match(
+		source,
+		/id: 'statusConnection'[\s\S]*?default: 'automatic'[\s\S]*?isVisibleExpression: advancedInitiatorVisible/,
+	)
+	assert.doesNotMatch(source, /id: 'regularRtpMonitoring'|Experimental:/)
 	assert.match(source, /id: 'mixerSnapshotChannel'[\s\S]*?default: 0/)
 	assert.doesNotMatch(source, /targetMode/)
 })

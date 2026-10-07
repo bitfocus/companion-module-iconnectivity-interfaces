@@ -22,7 +22,7 @@ test('builds the documented wildcard TNG host-session request', () => {
 	assert.equal(parseTngMessage(packet).messageClass, 1)
 })
 
-test('builds the captured one-time preset and scene queries', () => {
+test('builds preset queries and the documented active SceneNumber query', () => {
 	const address = { productId: 15, serial: 0x4078 }
 	assert.deepEqual(
 		parseTngMessage(getActivePresetMessage(address, 1)).content,
@@ -34,11 +34,11 @@ test('builds the captured one-time preset and scene queries', () => {
 	)
 	assert.deepEqual(
 		parseTngMessage(getActiveSceneMessage({ productId: 17, serial: 0x3318 }, 3)).content,
-		[0x03, 0x08, 0x02, 0x05, 0x04, 0x01, 0x13, 0x7f, 0x04, 0x01, 0x01, 0x41],
+		[0x03, 0x03, 0x01, 0x04, 0x01, 0x01, 0x04],
 	)
 })
 
-test('parses captured active preset, preset name, and scene replies', () => {
+test('parses preset/name replies and the documented SceneNumber reply', () => {
 	const address = { productId: 15, serial: 0x4078 }
 	const preset = parseTngMessage(buildTngMessage(address, 0, 1, [0x43, 0x03, 0x01, 0x06, 0x03, 0x01, 0x03, 0x01, 0x03]))
 	assert.deepEqual(preset.parameters.get(1), [3])
@@ -63,14 +63,9 @@ test('parses captured active preset, preset name, and scene replies', () => {
 	)
 	assert.equal(ascii(name.parameters.get(2)), 'Tune>Companion')
 	const scene = parseTngMessage(
-		buildTngMessage(
-			{ productId: 17, serial: 0x3318 },
-			0,
-			3,
-			[0x43, 0x08, 0x02, 0x05, 0x04, 0x01, 0x13, 0x7f, 0x06, 0x03, 0x01, 0x03, 0x41, 0x01],
-		),
+		buildTngMessage({ productId: 17, serial: 0x3318 }, 0, 3, [0x43, 0x03, 0x01, 0x06, 0x03, 0x01, 0x03, 0x04, 0x02]),
 	)
-	assert.deepEqual(scene.parameters.get(0x41), [1])
+	assert.deepEqual(scene.parameters.get(0x04), [2])
 })
 
 test('parses documented SceneNumber notifications from DeviceFeature', () => {

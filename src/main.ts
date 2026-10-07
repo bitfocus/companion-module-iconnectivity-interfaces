@@ -1,7 +1,12 @@
 import { InstanceBase, InstanceStatus, type SomeCompanionConfigField } from '@companion-module/base'
 import { isIPv4 } from 'node:net'
 import { GetConfigFields, type ModuleConfig } from './config.js'
-import { GetVariableDefinitions, UpdateVariableDefinitions, type VariablesSchema } from './variables.js'
+import {
+	FilterDiagnosticVariables,
+	GetVariableDefinitions,
+	UpdateVariableDefinitions,
+	type VariablesSchema,
+} from './variables.js'
 import { UpgradeScripts } from './upgrades.js'
 import { UpdateActions, type ActionsSchema } from './actions.js'
 import { UpdateFeedbacks, type FeedbacksSchema } from './feedbacks.js'
@@ -54,6 +59,7 @@ import {
 // Companion rate-limits variable publication, not MIDI transport traffic. Clock
 // pulses are tracked on every input but exposed at a deliberately lower rate.
 export const MIDI_CLOCK_PUBLISH_INTERVAL_MS = 250
+export const REGULAR_RTP_STATE_REFRESH_INTERVAL_MS = 3000
 
 export type ModuleSchema = {
 	config: ModuleConfig
@@ -73,6 +79,7 @@ export interface DeviceState {
 	hardwareVersion: string
 	serialDisplay: string
 	identityStatus: string
+	stateMonitoring: string
 	profile?: CapabilityProfile
 	failoverArmed: boolean
 	failoverAlarm: boolean
@@ -124,6 +131,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		hardwareVersion: '',
 		serialDisplay: '',
 		identityStatus: 'Waiting for device',
+		stateMonitoring: 'Not monitoring',
 		failoverArmed: false,
 		failoverAlarm: false,
 		mainAudio: 0,
@@ -157,7 +165,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		rtpLastConnectedAt: 0,
 	}
 	private transaction = 0
-	private readonly tngSession = random28()
+	private tngSession = random28()
 	private tngTransaction = 0
 	private pollTimer?: NodeJS.Timeout
 	private discoveryFallback?: NodeJS.Timeout
@@ -165,6 +173,13 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 	private configConnectTimeout?: NodeJS.Timeout
 	private configReleaseTimer?: NodeJS.Timeout
 	private liveStateKeepaliveTimer?: NodeJS.Timeout
+	private notificationRegistrationTimer?: NodeJS.Timeout
+	private notificationRegistrationTransaction?: number
+	private regularRtpRetryAt = 0
+	private lastRegularStateReadAt = 0
+	private regularRtpSceneNotificationReceived = false
+	private regularRtpSceneInitialReadComplete = false
+	private readonly regularStateReadTransactions = new Map<number, number | undefined>()
 	private readonly pendingStateReads = new Set<string>()
 	private notificationTimeoutSeconds = 5
 	private notificationClasses: number[] = []
@@ -199,6 +214,9 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		if (this.stateReadTimeout) clearTimeout(this.stateReadTimeout)
 		if (this.configConnectTimeout) clearTimeout(this.configConnectTimeout)
 		if (this.configReleaseTimer) clearTimeout(this.configReleaseTimer)
+		if (this.notificationRegistrationTimer) clearTimeout(this.notificationRegistrationTimer)
+		this.notificationRegistrationTimer = undefined
+		this.notificationRegistrationTransaction = undefined
 		if (this.liveStateKeepaliveTimer) clearInterval(this.liveStateKeepaliveTimer)
 		if (this.midiClockPublishTimer) clearTimeout(this.midiClockPublishTimer)
 		this.midiClockPublishTimer = undefined
@@ -262,6 +280,9 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		if (this.stateReadTimeout) clearTimeout(this.stateReadTimeout)
 		if (this.configConnectTimeout) clearTimeout(this.configConnectTimeout)
 		if (this.configReleaseTimer) clearTimeout(this.configReleaseTimer)
+		if (this.notificationRegistrationTimer) clearTimeout(this.notificationRegistrationTimer)
+		this.notificationRegistrationTimer = undefined
+		this.notificationRegistrationTransaction = undefined
 		if (this.liveStateKeepaliveTimer) clearInterval(this.liveStateKeepaliveTimer)
 		this.discoveryFallback = undefined
 		this.stateReadTimeout = undefined
@@ -281,6 +302,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		this.configRetryAt = 0
 		this.identityAttemptAt = 0
 		this.pendingStateReads.clear()
+		this.regularStateReadTransactions.clear()
 		this.closeTransport()
 		this.state.online = false
 		this.state.address = { productId: 0, serial: 0 }
@@ -288,6 +310,11 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		this.deviceModelMismatch = false
 		this.state.profile = profileForExpectedDevice(this.config.expectedDevice)
 		this.state.identityStatus = 'Waiting for device'
+		this.state.stateMonitoring = 'Not monitoring'
+		this.regularRtpRetryAt = 0
+		this.lastRegularStateReadAt = 0
+		this.regularRtpSceneNotificationReceived = false
+		this.regularRtpSceneInitialReadComplete = false
 		this.state.rtpPeerAddress = ''
 		this.state.rtpReconnectAttempts = 0
 		this.state.rtpLastDisconnectReason = ''
@@ -318,6 +345,13 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 					)
 					return
 				}
+				if (
+					this.usesRegularRtpMonitoring() &&
+					(this.config.remotePort || 5004) === (this.config.configRemotePort || 5002)
+				) {
+					this.updateStatus(InstanceStatus.BadConfig, 'Choose a regular RTP port different from the configuration port')
+					return
+				}
 				const transport = new AppleMidiSession({
 					role,
 					remoteHost: this.config.host,
@@ -342,6 +376,11 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 					if (justConnected) this.state.rtpLastConnectedAt = Date.now()
 					if (connectionChanged) this.updateNetworkStatus()
 					else this.publishState(false)
+					if (this.usesRegularRtpMonitoring()) {
+						if (connectionChanged && !status.connected) this.resetRegularRtpMonitoring()
+						if (justConnected) this.beginRegularRtpMonitoring()
+						return
+					}
 					if (justConnected && !this.configNetworkTransport) {
 						this.configRetryAt = 0
 						void this.openConfigurationTransport(generation)
@@ -364,8 +403,60 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		}
 	}
 
+	private usesRegularRtpMonitoring(): boolean {
+		return (
+			this.config.transport === 'rtp-midi' &&
+			(this.config.role ?? 'initiator') === 'initiator' &&
+			this.config.statusConnection !== 'configuration' &&
+			!['playaudio12', 'mioxl'].includes(this.config.expectedDevice)
+		)
+	}
+
+	private shouldMonitorDeviceState(): boolean {
+		return this.usesRegularRtpMonitoring() || this.config.livePresetSceneMonitoring === true
+	}
+
+	private beginRegularRtpMonitoring(): void {
+		this.resetRegularRtpMonitoring()
+		// Allow the newly accepted RTP session to settle before the first TNG request.
+		this.regularRtpRetryAt = Date.now() + 1000
+		this.state.stateMonitoring = 'Regular RTP: waiting for session readiness'
+		this.publishState()
+	}
+
+	private resetRegularRtpMonitoring(): void {
+		if (this.discoveryFallback) clearTimeout(this.discoveryFallback)
+		if (this.stateReadTimeout) clearTimeout(this.stateReadTimeout)
+		if (this.notificationRegistrationTimer) clearTimeout(this.notificationRegistrationTimer)
+		if (this.liveStateKeepaliveTimer) clearInterval(this.liveStateKeepaliveTimer)
+		this.discoveryFallback = undefined
+		this.stateReadTimeout = undefined
+		this.notificationRegistrationTimer = undefined
+		this.notificationRegistrationTransaction = undefined
+		this.liveStateKeepaliveTimer = undefined
+		this.liveStateMonitoringActive = false
+		this.pendingStateReads.clear()
+		this.regularStateReadTransactions.clear()
+		this.notificationClasses = []
+		this.state.address = { productId: 0, serial: 0 }
+		this.state.currentPreset = 0
+		this.state.currentPresetName = ''
+		this.state.currentScene = 'Unknown'
+		this.state.currentMixerSnapshot = 0
+		this.tngSession = random28()
+		this.state.identityStatus = 'Waiting for device'
+		this.state.stateMonitoring = 'Regular RTP: waiting for device'
+		this.identityAttemptAt = 0
+		this.regularRtpRetryAt = 0
+		this.lastRegularStateReadAt = 0
+		this.regularRtpSceneNotificationReceived = false
+		this.regularRtpSceneInitialReadComplete = false
+		this.publishState()
+	}
+
 	private async openConfigurationTransport(generation = this.lifecycleGeneration): Promise<void> {
 		if (
+			this.usesRegularRtpMonitoring() ||
 			generation !== this.lifecycleGeneration ||
 			this.configNetworkTransport ||
 			!this.config.host ||
@@ -440,6 +531,9 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		this.configConnectTimeout = undefined
 		if (this.configReleaseTimer) clearTimeout(this.configReleaseTimer)
 		this.configReleaseTimer = undefined
+		if (this.notificationRegistrationTimer) clearTimeout(this.notificationRegistrationTimer)
+		this.notificationRegistrationTimer = undefined
+		this.notificationRegistrationTransaction = undefined
 		if (this.liveStateKeepaliveTimer) clearInterval(this.liveStateKeepaliveTimer)
 		this.liveStateKeepaliveTimer = undefined
 		this.liveStateMonitoringActive = false
@@ -457,22 +551,60 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 	}
 
 	private requestInitialOperationalState(): void {
-		if (!this.configNetworkTransport || !this.state.profile) {
+		if ((!this.configNetworkTransport && !this.usesRegularRtpMonitoring()) || !this.state.profile) {
 			this.releaseConfigurationTransport()
 			return
 		}
+		if (this.usesRegularRtpMonitoring()) this.lastRegularStateReadAt = Date.now()
 		this.pendingStateReads.clear()
+		this.regularStateReadTransactions.clear()
 		this.pendingStateReads.add('preset')
-		this.sendMidi(getActivePresetMessage(this.state.address, this.nextTngTransaction()), true)
-		if (this.state.profile.scenes) {
+		this.sendMidi(
+			getActivePresetMessage(
+				this.state.address,
+				this.nextTngTransaction(),
+				this.usesRegularRtpMonitoring() ? this.tngSession : 0,
+			),
+			true,
+		)
+		if (this.state.profile.scenes && !this.usesRegularRtpMonitoring()) {
 			this.pendingStateReads.add('scene')
-			this.sendMidi(getActiveSceneMessage(this.state.address, this.nextTngTransaction()), true)
+			this.sendMidi(
+				getActiveSceneMessage(
+					this.state.address,
+					this.nextTngTransaction(),
+					this.usesRegularRtpMonitoring() ? this.tngSession : 0,
+				),
+				true,
+			)
 		}
+		this.armStateReadTimeout()
+	}
+
+	private armStateReadTimeout(): void {
 		if (this.stateReadTimeout) clearTimeout(this.stateReadTimeout)
-		this.stateReadTimeout = setTimeout(() => {
-			this.pendingStateReads.clear()
-			if (!this.startLiveStateMonitoring()) this.releaseConfigurationTransport()
-		}, 1500)
+		this.stateReadTimeout = setTimeout(
+			() => {
+				this.stateReadTimeout = undefined
+				if (this.usesRegularRtpMonitoring() && this.pendingStateReads.size) {
+					this.state.stateMonitoring = `Regular RTP: status read timed out (${[...this.pendingStateReads].join(', ')})`
+					this.log('warn', this.state.stateMonitoring)
+					if (this.pendingStateReads.has('preset') || this.pendingStateReads.has('presetName')) {
+						this.state.currentPreset = 0
+						this.state.currentPresetName = ''
+					}
+					this.regularRtpRetryAt = Date.now() + 30000
+					this.pendingStateReads.clear()
+					this.regularStateReadTransactions.clear()
+					this.publishState()
+					return
+				}
+				this.pendingStateReads.clear()
+				this.regularStateReadTransactions.clear()
+				if (!this.startLiveStateMonitoring()) this.releaseConfigurationTransport()
+			},
+			this.usesRegularRtpMonitoring() ? 5000 : 1500,
+		)
 	}
 
 	private finishStateRead(name: string): void {
@@ -480,6 +612,17 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		if (this.pendingStateReads.size > 0) return
 		if (this.stateReadTimeout) clearTimeout(this.stateReadTimeout)
 		this.stateReadTimeout = undefined
+		if (this.usesRegularRtpMonitoring()) {
+			this.regularRtpRetryAt = 0
+			if (this.liveStateMonitoringActive) {
+				this.state.stateMonitoring = 'Regular RTP: live notifications registered'
+				return
+			}
+			this.state.stateMonitoring = 'Regular RTP: status reads succeeded; live monitoring disabled'
+			this.log('info', this.state.stateMonitoring)
+			this.startLiveStateMonitoring()
+			return
+		}
 		if (this.startLiveStateMonitoring()) return
 		const transport = this.configNetworkTransport
 		if (!transport) return
@@ -491,7 +634,8 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 	}
 
 	private startLiveStateMonitoring(): boolean {
-		if (!this.config.livePresetSceneMonitoring || !this.configNetworkTransport) return false
+		if (!this.shouldMonitorDeviceState() || (!this.configNetworkTransport && !this.usesRegularRtpMonitoring()))
+			return false
 		if (this.liveStateMonitoringActive) return true
 		const classes = [
 			...(this.notificationClasses.includes(TngNotificationClass.programSelector)
@@ -502,23 +646,41 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 				: []),
 		]
 		if (!classes.length) {
+			this.state.stateMonitoring = 'Device did not report live notification support'
 			this.log('warn', 'The device did not report support for live preset/Scene notifications')
 			return false
 		}
-		this.sendMidi(
-			notificationMessage(this.state.address, this.tngSession, this.nextTngTransaction(), true, classes),
-			true,
-		)
+		const transaction = this.nextTngTransaction()
+		if (this.usesRegularRtpMonitoring()) {
+			if (this.notificationRegistrationTransaction !== undefined) return true
+			this.notificationRegistrationTransaction = transaction
+			this.state.stateMonitoring = 'Regular RTP: waiting for notification registration'
+			this.notificationRegistrationTimer = setTimeout(() => {
+				this.notificationRegistrationTimer = undefined
+				this.notificationRegistrationTransaction = undefined
+				this.state.stateMonitoring = 'Regular RTP: notification registration timed out'
+				this.log('warn', this.state.stateMonitoring)
+				this.publishState()
+			}, 3000)
+		}
+		this.sendMidi(notificationMessage(this.state.address, this.tngSession, transaction, true, classes), true)
+		if (!this.usesRegularRtpMonitoring()) this.enableLiveStateMonitoring()
+		return true
+	}
+
+	private enableLiveStateMonitoring(): void {
 		if (this.liveStateKeepaliveTimer) clearInterval(this.liveStateKeepaliveTimer)
 		const keepaliveMs = Math.max(1000, Math.min(30000, Math.floor(this.notificationTimeoutSeconds * 800)))
 		this.liveStateKeepaliveTimer = setInterval(() => {
-			if (!this.configNetworkTransport || !this.configNetworkConnected) return
+			if (this.usesRegularRtpMonitoring() ? !this.networkConnected : !this.configNetworkConnected) return
 			this.sendMidi(pingMessage(this.state.address, this.tngSession, this.nextTngTransaction()), true)
 		}, keepaliveMs)
 		this.liveStateMonitoringActive = true
+		this.state.stateMonitoring = this.usesRegularRtpMonitoring()
+			? 'Regular RTP: live notifications registered'
+			: 'Configuration RTP: live monitoring enabled'
 		this.updateNetworkStatus()
-		this.log('info', 'Live device preset/Scene monitoring enabled')
-		return true
+		this.log('info', this.state.stateMonitoring)
 	}
 
 	private updateNetworkStatus(): void {
@@ -535,17 +697,24 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		this.updateStatus(
 			connected ? InstanceStatus.Ok : InstanceStatus.Connecting,
 			connected
-				? this.configNetworkConnected
-					? this.liveStateMonitoringActive
-						? 'RTP MIDI connected; monitoring device state'
-						: 'RTP MIDI connected; reading device configuration'
-					: 'RTP MIDI connected'
+				? this.usesRegularRtpMonitoring()
+					? this.state.stateMonitoring
+					: this.configNetworkConnected
+						? this.liveStateMonitoringActive
+							? 'RTP MIDI connected; monitoring device state'
+							: 'RTP MIDI connected; reading device configuration'
+						: 'RTP MIDI connected'
 				: 'Waiting for selected RTP-MIDI port',
 		)
 		this.publishState()
 	}
 
 	private receiveUserMidi(bytes: number[]): void {
+		if (this.usesRegularRtpMonitoring() && bytes.slice(0, 5).join(',') === '240,0,1,115,125') {
+			const message = parseTngMessage(bytes)
+			if (message) this.receiveTng(message, bytes)
+			return
+		}
 		this.state.lastSeen = Date.now()
 		const separated = separateRealtimeTelemetry(bytes)
 		const clockPulses = separated.clockPulses
@@ -583,7 +752,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		this.publishMidiInputState()
 		setImmediate(() => {
 			this.midiInPulse = false
-			this.setVariableValues({ midiIn: false })
+			this.publishVariableValues({ midiIn: false })
 			this.processingMidiMessage = false
 			this.processNextMidiMessage()
 		})
@@ -597,8 +766,13 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		}, MIDI_CLOCK_PUBLISH_INTERVAL_MS)
 	}
 
+	private publishVariableValues(values: VariablesSchema): void {
+		const filtered = FilterDiagnosticVariables(values, this.config.showDiagnostics === true)
+		if (Object.keys(filtered).length) this.setVariableValues(filtered)
+	}
+
 	private publishMidiClockState(): void {
-		this.setVariableValues({
+		this.publishVariableValues({
 			midi_in_count: this.state.midiInCount,
 			midi_clock_receiving: this.state.midiClockReceiving,
 			midi_clock_bpm: this.state.midiClockBpm,
@@ -627,7 +801,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		if (signature === this.lastMidiInputStateSignature) {
 			// Keep the compatibility trigger prompt without republishing unchanged
 			// descriptive state for repeated identical MIDI messages.
-			this.setVariableValues({
+			this.publishVariableValues({
 				midi_in_count: this.state.midiInCount,
 				midi_in_dropped_count: this.state.midiInDroppedCount,
 				midi_in_queue_depth: this.midiMessageQueue.length,
@@ -664,12 +838,12 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		}
 		if (this.state.profile?.scenes) values.current_scene = this.state.currentScene
 		if (this.state.profile?.mixerSnapshots) values.current_mixer_snapshot = this.state.currentMixerSnapshot || 'Unknown'
-		this.setVariableValues(values)
+		this.publishVariableValues(values)
 	}
 
 	private publishMidiOutputState(): void {
 		const details = this.state.midiOut
-		this.setVariableValues({
+		this.publishVariableValues({
 			midi_out_count: this.state.midiOutCount,
 			midi_out_type: details.type,
 			midi_out_channel: details.channel,
@@ -720,7 +894,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		const channel = (bytes[0] & 0x0f) + 1
 		const program = (bytes[1] & 0x7f) + 1
 		let observed = false
-		if (channel === (this.config.presetChannel || 1)) {
+		if (channel === (this.config.presetChannel || 1) && !this.usesRegularRtpMonitoring()) {
 			this.state.currentPreset = program
 			this.state.currentPresetName = `Preset ${program}`
 			if (this.state.profile?.mixerSnapshots) this.state.currentMixerSnapshot = 1
@@ -748,10 +922,31 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		const bytes = programChangeBytes(channel, value)
 		this.log('info', `Recall preset ${value}: sending ${formatMidi(bytes)} on RTP-MIDI channel ${channel}`)
 		this.sendMidi(bytes)
-		this.state.currentPreset = value
-		if (this.state.profile?.mixerSnapshots) this.state.currentMixerSnapshot = 1
+		if (this.usesRegularRtpMonitoring()) {
+			// A sent command is not device confirmation. Cancel pre-recall reads
+			// so a delayed response cannot restore the previous preset/name.
+			if (this.stateReadTimeout) clearTimeout(this.stateReadTimeout)
+			if (this.liveStateKeepaliveTimer) clearInterval(this.liveStateKeepaliveTimer)
+			if (this.notificationRegistrationTimer) clearTimeout(this.notificationRegistrationTimer)
+			this.stateReadTimeout = undefined
+			this.liveStateKeepaliveTimer = undefined
+			this.notificationRegistrationTimer = undefined
+			this.notificationRegistrationTransaction = undefined
+			this.liveStateMonitoringActive = false
+			this.pendingStateReads.clear()
+			this.regularStateReadTransactions.clear()
+			this.lastRegularStateReadAt = Date.now()
+			this.regularRtpRetryAt = 0
+			this.state.currentPreset = 0
+			this.state.currentPresetName = ''
+			this.state.currentMixerSnapshot = 0
+			this.state.stateMonitoring = 'Regular RTP: confirming preset recall'
+		} else {
+			this.state.currentPreset = value
+			if (this.state.profile?.mixerSnapshots) this.state.currentMixerSnapshot = 1
+		}
 		this.state.lastRecallAt = Date.now()
-		this.publishState(false)
+		this.publishState(this.usesRegularRtpMonitoring())
 	}
 
 	recallScene(scene: string): void {
@@ -810,7 +1005,17 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 	}
 	sendMidi(bytes: number[], internal = false): void {
 		if (internal) {
-			if (this.configNetworkTransport) this.configNetworkTransport.send(bytes)
+			if (this.usesRegularRtpMonitoring()) {
+				const query = parseTngMessage(bytes)
+				if (query?.messageClass === TngMessageClass.getParameterValue && query.dataClass === TngDataClass.presetInfo) {
+					this.regularStateReadTransactions.set(
+						query.transactionId,
+						query.dataClass === TngDataClass.presetInfo && query.content[2] === 2 ? query.content[7] : undefined,
+					)
+				}
+			}
+			if (this.usesRegularRtpMonitoring() && this.networkTransport) this.networkTransport.send(bytes)
+			else if (this.configNetworkTransport) this.configNetworkTransport.send(bytes)
 			else if (this.usbTransport) this.usbTransport.send(bytes)
 			else throw new Error('The device configuration session is not connected')
 		} else if (this.networkTransport) this.networkTransport.send(bytes)
@@ -829,6 +1034,25 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		}
 	}
 	discover(force = false): void {
+		if (this.usesRegularRtpMonitoring()) {
+			if (!this.networkConnected || (!force && Date.now() < this.regularRtpRetryAt)) return
+			if (!force && this.discoveryFallback) return
+			this.identityAttemptAt = Date.now()
+			this.state.stateMonitoring = 'Regular RTP: querying device'
+			this.state.identityStatus = 'Discovering TNG identity through regular RTP'
+			this.sendMidi(hostSessionMessage(this.tngSession, this.nextTngTransaction()), true)
+			if (this.discoveryFallback) clearTimeout(this.discoveryFallback)
+			this.discoveryFallback = setTimeout(() => {
+				this.discoveryFallback = undefined
+				this.regularRtpRetryAt = Date.now() + 2000
+				this.state.stateMonitoring = 'Regular RTP: no TNG identity reply; configuration port untouched'
+				this.state.identityStatus = 'Regular RTP discovery unavailable; retrying in 2 seconds'
+				this.log('warn', this.state.stateMonitoring)
+				this.publishState()
+			}, 5000)
+			this.publishState()
+			return
+		}
 		if (this.networkTransport && !this.configNetworkTransport) {
 			if (this.networkConnected) void this.openConfigurationTransport()
 			return
@@ -857,6 +1081,26 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 			this.state.midiClockBpm = 0
 			this.midiClockIntervals.length = 0
 			this.publishMidiClockState()
+		}
+		if (this.usesRegularRtpMonitoring()) {
+			if (!this.networkConnected || this.deviceModelMismatch) return
+			if (this.state.identityStatus !== 'TNG identity received') this.discover()
+			else if (
+				this.shouldMonitorDeviceState() &&
+				this.pendingStateReads.size === 0 &&
+				!this.stateReadTimeout &&
+				this.notificationRegistrationTransaction === undefined &&
+				Date.now() >= this.regularRtpRetryAt &&
+				Date.now() - this.lastRegularStateReadAt >= REGULAR_RTP_STATE_REFRESH_INTERVAL_MS
+			)
+				this.requestInitialOperationalState()
+			else if (
+				!this.shouldMonitorDeviceState() &&
+				this.state.stateMonitoring.startsWith('Regular RTP: status read timed out') &&
+				Date.now() >= this.regularRtpRetryAt
+			)
+				this.requestInitialOperationalState()
+			return
 		}
 		if (this.configNetworkTransport && !this.configNetworkTransport.getStatus().connected) return
 		if (!this.state.address.productId) return this.discover()
@@ -983,6 +1227,44 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 
 	private receiveTng(message: TngMessage, raw: number[]): void {
 		if (message.sessionId !== this.tngSession && message.sessionId !== 0) return
+		if (this.usesRegularRtpMonitoring() && message.sessionId !== this.tngSession) return
+		if (
+			this.usesRegularRtpMonitoring() &&
+			this.state.address.productId &&
+			(message.productId !== this.state.address.productId || message.serial !== this.state.address.serial)
+		)
+			return
+		if (message.messageClass === TngMessageClass.ack && this.usesRegularRtpMonitoring()) {
+			if (
+				message.sessionId !== this.tngSession ||
+				message.transactionId !== this.notificationRegistrationTransaction ||
+				message.content.length !== 5 ||
+				message.dataClass !== 0 ||
+				message.content[2] !== 0x11 ||
+				message.content[3] !== 0
+			)
+				return
+			if (this.notificationRegistrationTimer) clearTimeout(this.notificationRegistrationTimer)
+			this.notificationRegistrationTimer = undefined
+			this.notificationRegistrationTransaction = undefined
+			if (message.content[4] === 0) this.enableLiveStateMonitoring()
+			else {
+				this.state.stateMonitoring = `Regular RTP: notification registration rejected (error ${message.content[4]})`
+				this.log('warn', this.state.stateMonitoring)
+			}
+			this.publishState()
+			return
+		}
+		if (
+			this.usesRegularRtpMonitoring() &&
+			message.messageClass === TngMessageClass.returnParameterValue &&
+			message.dataClass === TngDataClass.presetInfo
+		) {
+			if (!this.regularStateReadTransactions.has(message.transactionId)) return
+			const nameForPreset = this.regularStateReadTransactions.get(message.transactionId)
+			this.regularStateReadTransactions.delete(message.transactionId)
+			if (nameForPreset !== undefined && nameForPreset !== this.state.currentPreset) return
+		}
 		this.identityAttemptAt = 0
 		this.state.deviceResponseInCount++
 		this.state.lastDeviceResponseIn = describeMidi(raw).raw
@@ -995,7 +1277,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 			return
 		}
 		if (message.messageClass === TngMessageClass.deviceSession && message.dataClass === TngDataClass.sessionInfo) {
-			if (this.discoveryFallback) clearTimeout(this.discoveryFallback)
+			if (!this.usesRegularRtpMonitoring() && this.discoveryFallback) clearTimeout(this.discoveryFallback)
 			this.state.identityStatus = 'TNG session established; requesting identity'
 			this.identityAttemptAt = Date.now()
 			this.sendMidi(getDeviceInfoMessage(this.state.address, this.tngSession, this.nextTngTransaction()), true)
@@ -1023,6 +1305,8 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 			this.notificationTimeoutSeconds = message.parameters.get(0x19)?.[0] || 5
 			this.notificationClasses = message.parameters.get(0x1a) || []
 			this.state.name = ascii(message.parameters.get(0x40)) || productName || detectedProfile.name
+			if (this.discoveryFallback) clearTimeout(this.discoveryFallback)
+			this.discoveryFallback = undefined
 			this.state.identityStatus = 'TNG identity received'
 			this.updateStatus(InstanceStatus.Ok, `${productName || detectedProfile.name} connected`)
 			this.requestInitialOperationalState()
@@ -1035,30 +1319,65 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 			const presetName = ascii(message.parameters.get(0x02))
 			const scene = message.parameters.get(0x04)?.[0]
 			if (presetValue) {
+				const presetChanged = this.state.currentPreset !== presetValue
+				const previousPreset = this.state.currentPreset
 				this.state.currentPreset = presetValue
+				if (this.usesRegularRtpMonitoring() && presetChanged) {
+					this.log(
+						'info',
+						`Observed preset ${presetValue} through regular RTP ${message.messageClass === TngMessageClass.notifyParameterValue ? 'notification' : 'status read'}`,
+					)
+					// A preset load may invalidate notification registration. Renew it after
+					// the status read sequence finishes, including when no event arrived.
+					if (previousPreset && this.liveStateMonitoringActive) {
+						if (this.liveStateKeepaliveTimer) clearInterval(this.liveStateKeepaliveTimer)
+						this.liveStateKeepaliveTimer = undefined
+						this.liveStateMonitoringActive = false
+					}
+				}
 				if (message.messageClass === TngMessageClass.notifyParameterValue && this.state.profile?.mixerSnapshots)
 					this.state.currentMixerSnapshot = 1
-				this.state.currentPresetName = ''
+				if (!this.usesRegularRtpMonitoring() || presetChanged) this.state.currentPresetName = ''
 				this.pendingStateReads.delete('preset')
 				this.pendingStateReads.add('presetName')
-				this.sendMidi(getPresetNameMessage(this.state.address, this.nextTngTransaction(), presetValue), true)
+				if (this.usesRegularRtpMonitoring() && !this.stateReadTimeout) this.armStateReadTimeout()
+				this.sendMidi(
+					getPresetNameMessage(
+						this.state.address,
+						this.nextTngTransaction(),
+						presetValue,
+						this.usesRegularRtpMonitoring() ? this.tngSession : 0,
+					),
+					true,
+				)
 			}
-			if (presetName) {
+			if (message.parameters.has(0x02)) {
 				this.state.currentPresetName = presetName
+				if (
+					this.usesRegularRtpMonitoring() &&
+					!this.regularRtpSceneNotificationReceived &&
+					!this.regularRtpSceneInitialReadComplete &&
+					this.pendingStateReads.has('presetName') &&
+					this.state.profile?.scenes
+				) {
+					this.pendingStateReads.add('scene')
+					this.sendMidi(getActiveSceneMessage(this.state.address, this.nextTngTransaction(), this.tngSession), true)
+				}
 				this.finishStateRead('presetName')
 			}
-			if (scene) {
-				this.state.currentScene = scene === 1 ? 'A' : scene === 2 ? 'B' : String(scene)
-				this.finishStateRead('scene')
-			}
-		} else if (
-			(message.messageClass === TngMessageClass.returnParameterValue ||
-				message.messageClass === TngMessageClass.notifyParameterValue) &&
-			message.dataClass === TngDataClass.sceneInfo
-		) {
-			const scene = message.parameters.get(0x41)?.[0]
-			if (scene) {
-				this.state.currentScene = scene === 1 ? 'A' : scene === 2 ? 'B' : String(scene)
+			if (scene === 1 || scene === 2) {
+				if (this.usesRegularRtpMonitoring()) {
+					if (message.messageClass === TngMessageClass.notifyParameterValue)
+						this.regularRtpSceneNotificationReceived = true
+					else this.regularRtpSceneInitialReadComplete = true
+				}
+				// A live change can arrive after the initial read was sent but before its reply.
+				if (
+					!this.usesRegularRtpMonitoring() ||
+					message.messageClass === TngMessageClass.notifyParameterValue ||
+					!this.regularRtpSceneNotificationReceived
+				)
+					this.state.currentScene = scene === 1 ? 'A' : 'B'
 				this.finishStateRead('scene')
 			}
 		}
@@ -1079,6 +1398,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 			firmware_version: s.firmware,
 			hardware_version: s.hardwareVersion,
 			identity_status: s.identityStatus,
+			state_monitoring: s.stateMonitoring,
 			detected_capabilities: s.profile
 				? [
 						'midi',
@@ -1157,8 +1477,12 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		}
 		for (let i = 0; i < (s.profile?.meterChannels ?? 0); i++)
 			values[`meter_${i + 1}_db`] = Number.isFinite(s.meterDb[i]) ? Math.round(s.meterDb[i] * 10) / 10 : -99
-		const allowed = new Set(Object.keys(GetVariableDefinitions(s.profile, this.config.receiveMidiClock !== false)))
-		this.setVariableValues(Object.fromEntries(Object.entries(values).filter(([id]) => allowed.has(id))))
+		const allowed = new Set(
+			Object.keys(
+				GetVariableDefinitions(s.profile, this.config.receiveMidiClock !== false, this.config.showDiagnostics === true),
+			),
+		)
+		this.publishVariableValues(Object.fromEntries(Object.entries(values).filter(([id]) => allowed.has(id))))
 		if (checkFeedbacks) this.checkAllFeedbacks()
 	}
 
