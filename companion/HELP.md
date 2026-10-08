@@ -8,6 +8,8 @@ For **PlayAUDIO1U and mioXM**, identity and status monitoring use this regular R
 
 Select **Interface model** to keep model-specific controls available while the device is offline. **Auto-detect** waits for discovery before exposing those controls and uses regular-RTP status discovery. An explicitly selected model that differs from the detected device produces a configuration error and blocks model-specific commands. Select PlayAUDIO12 or mioXL explicitly to retain their configuration-port discovery method; their regular-RTP monitoring has not been qualified.
 
+PlayAUDIO1U and mioXM are the hardware-tested models. PlayAUDIO12 and mioXL support is implemented but has not been tested on hardware with this module; report problems with the module log.
+
 The RTP name appears in Auracle. Device-incompatible punctuation is converted to safe ASCII automatically. Each module instance uses independent local RTP ports.
 
 ### Device state and recalls
@@ -55,7 +57,7 @@ Explicit PlayAUDIO12 and mioXL selections retain their existing configuration-po
 
 Choose **USB MIDI** only when the interface is physically connected to the Companion computer; select the local input and output ports. Network-only configurations do not depend on USB port names. USB behavior and platform qualification remain separate from the tested Ethernet path.
 
-**Responder** requires a fixed, even **Companion RTP Port**. Configure the device to connect to the Companion computer's IP address on that port. Responder mode does not have a complete identity/configuration discovery path.
+**Responder (experimental)** requires a fixed, even **Companion RTP Port**. Configure the device to connect to the Companion computer's IP address on that port. Responder mode carries MIDI but does not have a complete identity/configuration discovery path, so device state monitoring is unavailable. Use **Initiator** for normal operation.
 
 The normal RTP connection retries invitations every two seconds and detects loss of an established session after about seven seconds without traffic. Configuration-port discovery opens only after the user RTP session connects, times out after ten seconds, and backs off 30 seconds before retrying.
 
