@@ -24,11 +24,11 @@ On promotion, keep the Candidate archive and add a separately named Production a
 
 ## CI test builds
 
-Every push to any branch runs `.github/workflows/test-build.yaml`, which tests and packages the module and attaches an importable bundle to the workflow run (Actions → the run → *Artifacts*). Unzip the download and import the `.tgz` into Companion.
+Every push to any branch runs `.github/workflows/test-build.yaml`, which tests and packages the module. The newest build is published as a plain `.tgz` on the rolling **Latest test build** pre-release (Releases → `test-build`), whose page always holds only the most recent build; download it and import it into Companion. The same file is also attached to each workflow run under *Artifacts*, which GitHub delivers as a zip.
 
 - Test builds get a unique version from `scripts/set-test-version.mjs`: the next patch number plus the GitHub run number and attempt, e.g. `0.15.3-test.45.1` when `package.json` says `0.15.2`. Run numbers are never reused, so Companion never rejects an import as a duplicate. The version sorts above the last numbered Candidate and below the next one, and the manifest is marked as a pre-release.
 - The version is set only inside the CI checkout and is never committed.
-- Test builds are **not** Candidates or Production. They are kept as workflow artifacts for 30 days and are never copied into `releases/`. A build that should be tracked is packaged as a normal numbered Candidate under the procedure above.
+- Test builds are **not** Candidates or Production. The rolling pre-release is replaced by every push, run artifacts are kept for 30 days, and neither is ever copied into `releases/`. A build that should be tracked is packaged as a normal numbered Candidate under the procedure above.
 
 ## Archive availability and latest evidence (2026-10-07)
 

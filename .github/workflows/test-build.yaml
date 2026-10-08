@@ -10,7 +10,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  # Write access is needed to update the rolling "test-build" pre-release.
+  contents: write
 
 concurrency:
   group: test-build-${{ github.ref }}
@@ -48,11 +49,33 @@ jobs:
           path: pkg/iconnectivity-interfaces-${{ steps.version.outputs.version }}.tgz
           if-no-files-found: error
           retention-days: 30
+      - name: Publish to the rolling "Latest test build" pre-release
+        # A plain .tgz download (no zip) at a fixed URL that always holds the newest build.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          tag=test-build
+          file="pkg/iconnectivity-interfaces-${VERSION}.tgz"
+          notes="Newest automatic test build: **${VERSION}** from \`${GITHUB_REF_NAME}\` at ${GITHUB_SHA::7}.
+
+          Download the .tgz below and import it in Companion. This is a test build for trying changes, not a Candidate or Production release. It is replaced by every new push."
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/${tag}" -f sha="$GITHUB_SHA" -F force=true >/dev/null
+          else
+            gh release create "$tag" --prerelease --title "Latest test build" --target "$GITHUB_SHA" --notes "$notes"
+          fi
+          gh release upload "$tag" "$file" --clobber
+          gh release view "$tag" --json assets --jq '.assets[].name' | while read -r name; do
+            if [ "$name" != "$(basename "$file")" ]; then gh release delete-asset "$tag" "$name" --yes; fi
+          done
+          gh release edit "$tag" --prerelease --title "Latest test build ${VERSION}" --notes "$notes"
       - name: Summary
         run: |
           {
             echo "### Companion test build: \`${{ steps.version.outputs.version }}\`"
             echo
-            echo "Download **iconnectivity-interfaces-${{ steps.version.outputs.version }}** under *Artifacts* below, unzip it, and import the \`.tgz\` in Companion."
+            echo "Easiest: download the \`.tgz\` from the [Latest test build](${{ github.server_url }}/${{ github.repository }}/releases/tag/test-build) release page and import it in Companion."
+            echo "The same file is also under *Artifacts* below (GitHub zips it; unzip to get the \`.tgz\`)."
             echo "This is a test build, not a Candidate or Production release."
           } >> "$GITHUB_STEP_SUMMARY"
