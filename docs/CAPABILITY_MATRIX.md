@@ -18,6 +18,7 @@ Legend: **H** hardware-validated locally; **I** implemented but needs release va
 | Mixer snapshot recall/notification  | **I**                       | N/A                         | **P**                       | device dependent                   |
 | Current preset feedback/buttons     | **I**                       | **I**                       | **I**                       | **I** when presets are supported   |
 | TNG state refresh action            | **I** regular RTP           | **I** regular RTP           | N/A                         | mioXL **I**                        |
+| Scene reconcile read (15 s quiet)   | **I** regular RTP           | N/A                         | N/A                         | N/A                                |
 | Scene A/B Program Change recall     | **H**                       | N/A                         | **I**                       | N/A                                |
 | Failover/host health                | **P**                       | N/A                         | **I**                       | N/A                                |
 | Audio meters                        | **P**                       | N/A                         | **I**                       | device dependent                   |

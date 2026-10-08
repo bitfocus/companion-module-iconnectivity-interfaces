@@ -60,6 +60,9 @@ import {
 // pulses are tracked on every input but exposed at a deliberately lower rate.
 export const MIDI_CLOCK_PUBLISH_INTERVAL_MS = 250
 export const REGULAR_RTP_STATE_REFRESH_INTERVAL_MS = 3000
+// Re-read the active Scene when nothing has been heard about it for this long,
+// so a lost change notification cannot leave Scene feedback stale indefinitely.
+export const REGULAR_RTP_SCENE_RECONCILE_INTERVAL_MS = 15000
 
 export type ModuleSchema = {
 	config: ModuleConfig
@@ -179,6 +182,12 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 	private lastRegularStateReadAt = 0
 	private regularRtpSceneNotificationReceived = false
 	private regularRtpSceneInitialReadComplete = false
+	// Every Scene change source (notification, recall, Scene Program Change) bumps
+	// this. A Scene read reply only applies if nothing changed since it was sent.
+	private sceneChangeSequence = 0
+	private sceneReadTransaction?: number
+	private sceneReadSequence = 0
+	private lastSceneKnownAt = 0
 	private readonly regularStateReadTransactions = new Map<number, number | undefined>()
 	private readonly pendingStateReads = new Set<string>()
 	private notificationTimeoutSeconds = 5
@@ -319,6 +328,10 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		this.lastRegularStateReadAt = 0
 		this.regularRtpSceneNotificationReceived = false
 		this.regularRtpSceneInitialReadComplete = false
+		this.sceneReadTransaction = undefined
+		this.sceneChangeSequence = 0
+		this.sceneReadSequence = 0
+		this.lastSceneKnownAt = 0
 		this.state.rtpPeerAddress = ''
 		this.state.rtpReconnectAttempts = 0
 		this.state.rtpLastDisconnectReason = ''
@@ -466,6 +479,10 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		this.lastRegularStateReadAt = 0
 		this.regularRtpSceneNotificationReceived = false
 		this.regularRtpSceneInitialReadComplete = false
+		this.sceneReadTransaction = undefined
+		this.sceneChangeSequence = 0
+		this.sceneReadSequence = 0
+		this.lastSceneKnownAt = 0
 		this.publishState()
 	}
 
@@ -922,6 +939,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 			!this.selectorChannelConflict('scene')
 		) {
 			this.state.currentScene = program === 1 ? 'A' : program === 2 ? 'B' : String(program)
+			this.noteSceneChange()
 			observed = true
 		}
 		if (
@@ -970,6 +988,18 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		this.publishState(this.usesRegularRtpMonitoring())
 	}
 
+	/** Records a Scene change so any Scene read already in flight is treated as stale. */
+	private noteSceneChange(): void {
+		this.sceneChangeSequence++
+		this.lastSceneKnownAt = Date.now()
+	}
+
+	/** Initial read until Scene is known, then a reconcile read after a quiet interval. */
+	private sceneReadDue(): boolean {
+		if (!this.regularRtpSceneNotificationReceived && !this.regularRtpSceneInitialReadComplete) return true
+		return Date.now() - this.lastSceneKnownAt >= REGULAR_RTP_SCENE_RECONCILE_INTERVAL_MS
+	}
+
 	/** Describes a selector channel that would also trigger another configured selector. */
 	selectorChannelConflict(selector: 'scene' | 'mixerSnapshot'): string | undefined {
 		const channel = selector === 'scene' ? this.config.sceneChannel : this.config.mixerSnapshotChannel
@@ -993,6 +1023,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		this.log('info', `Recall Scene ${normalized}: sending ${formatMidi(bytes)} on RTP-MIDI channel ${channel}`)
 		this.sendMidi(bytes)
 		this.state.currentScene = normalized
+		this.noteSceneChange()
 		this.state.lastRecallAt = Date.now()
 		this.publishState()
 	}
@@ -1426,29 +1457,42 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 				this.state.currentPresetName = presetName
 				if (
 					this.usesRegularRtpMonitoring() &&
-					!this.regularRtpSceneNotificationReceived &&
-					!this.regularRtpSceneInitialReadComplete &&
 					this.pendingStateReads.has('presetName') &&
-					this.state.profile?.scenes
+					this.state.profile?.scenes &&
+					this.sceneReadDue()
 				) {
 					this.pendingStateReads.add('scene')
-					this.sendMidi(getActiveSceneMessage(this.state.address, this.nextTngTransaction(), this.tngSession), true)
+					const transaction = this.nextTngTransaction()
+					this.sceneReadTransaction = transaction
+					this.sceneReadSequence = this.sceneChangeSequence
+					this.lastSceneKnownAt = Date.now()
+					this.sendMidi(getActiveSceneMessage(this.state.address, transaction, this.tngSession), true)
 				}
 				this.finishStateRead('presetName')
 			}
 			if (scene === 1 || scene === 2) {
+				const notification = message.messageClass === TngMessageClass.notifyParameterValue
+				let apply = true
 				if (this.usesRegularRtpMonitoring()) {
-					if (message.messageClass === TngMessageClass.notifyParameterValue)
+					if (notification) {
 						this.regularRtpSceneNotificationReceived = true
-					else this.regularRtpSceneInitialReadComplete = true
+						this.noteSceneChange()
+					} else {
+						this.regularRtpSceneInitialReadComplete = true
+						// A live change, Companion recall or Scene Program Change can happen after
+						// a read was sent but before its reply; the newer change wins.
+						apply =
+							message.transactionId === this.sceneReadTransaction && this.sceneReadSequence === this.sceneChangeSequence
+						if (message.transactionId === this.sceneReadTransaction) this.sceneReadTransaction = undefined
+						this.lastSceneKnownAt = Date.now()
+						if (apply && this.state.currentScene !== 'Unknown' && this.state.currentScene !== (scene === 1 ? 'A' : 'B'))
+							this.log(
+								'warn',
+								`Scene re-read corrected Companion from ${this.state.currentScene} to ${scene === 1 ? 'A' : 'B'}`,
+							)
+					}
 				}
-				// A live change can arrive after the initial read was sent but before its reply.
-				if (
-					!this.usesRegularRtpMonitoring() ||
-					message.messageClass === TngMessageClass.notifyParameterValue ||
-					!this.regularRtpSceneNotificationReceived
-				)
-					this.state.currentScene = scene === 1 ? 'A' : 'B'
+				if (apply) this.state.currentScene = scene === 1 ? 'A' : 'B'
 				this.finishStateRead('scene')
 			}
 		}
