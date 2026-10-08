@@ -1,0 +1,58 @@
+name: Test build
+
+# Builds an importable Companion package for every push, with a unique test
+# version (see scripts/set-test-version.mjs). Download it from the run's
+# Artifacts section, unzip, and import the .tgz into Companion.
+on:
+  push:
+    branches:
+      - '**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Package test build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v7
+      - name: Use Node.js from .node-version
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+      - name: Prepare Environment
+        run: corepack enable
+      - name: Install dependencies
+        run: yarn install --immutable
+      - name: Set unique test version
+        id: version
+        run: node scripts/set-test-version.mjs "${{ github.run_number }}" "${{ github.run_attempt }}" >> "$GITHUB_OUTPUT"
+      - name: Run tests
+        run: yarn test
+      - name: Package
+        run: yarn package --prerelease
+      - name: Verify package
+        run: yarn package:verify
+      - name: Upload test build
+        uses: actions/upload-artifact@v6
+        with:
+          name: iconnectivity-interfaces-${{ steps.version.outputs.version }}
+          path: pkg/iconnectivity-interfaces-${{ steps.version.outputs.version }}.tgz
+          if-no-files-found: error
+          retention-days: 30
+      - name: Summary
+        run: |
+          {
+            echo "### Companion test build: \`${{ steps.version.outputs.version }}\`"
+            echo
+            echo "Download **iconnectivity-interfaces-${{ steps.version.outputs.version }}** under *Artifacts* below, unzip it, and import the \`.tgz\` in Companion."
+            echo "This is a test build, not a Candidate or Production release."
+          } >> "$GITHUB_STEP_SUMMARY"

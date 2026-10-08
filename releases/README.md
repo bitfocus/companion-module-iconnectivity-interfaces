@@ -22,6 +22,14 @@ iconnectivity-interfaces-vX.Y.Z-CANDIDATE.tgz
 
 On promotion, keep the Candidate archive and add a separately named Production archive. Do not delete older archives unless explicitly instructed.
 
+## CI test builds
+
+Every push to any branch runs `.github/workflows/test-build.yaml`, which tests and packages the module and attaches an importable bundle to the workflow run (Actions → the run → *Artifacts*). Unzip the download and import the `.tgz` into Companion.
+
+- Test builds get a unique version from `scripts/set-test-version.mjs`: the next patch number plus the GitHub run number and attempt, e.g. `0.15.3-test.45.1` when `package.json` says `0.15.2`. Run numbers are never reused, so Companion never rejects an import as a duplicate. The version sorts above the last numbered Candidate and below the next one, and the manifest is marked as a pre-release.
+- The version is set only inside the CI checkout and is never committed.
+- Test builds are **not** Candidates or Production. They are kept as workflow artifacts for 30 days and are never copied into `releases/`. A build that should be tracked is packaged as a normal numbered Candidate under the procedure above.
+
 ## Archive availability and latest evidence (2026-10-07)
 
 This inventory preserves the original development workspace's archive names, hashes and observations. Package binaries are ignored by Git and are not included in this source checkout. The original 0.14.22 binary was not recovered or uploaded during the persistence audit; its recorded SHA-256 identifies the user's original tested package. No replacement was built. See `../docs/PERSISTENCE_AUDIT_0_14_22.md` for recovery evidence and the independent 0.15.0 branch.
