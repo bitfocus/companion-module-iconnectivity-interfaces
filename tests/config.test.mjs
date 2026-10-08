@@ -12,7 +12,7 @@ test('configuration separates Ethernet roles and keeps MIDI options together', a
 	assert.match(source, /\{ id: 'usb-midi', label: 'USB MIDI' \}/)
 	assert.match(source, /label: 'RTP Role',[\s\S]*?tooltip:\s*'Choose whether Companion initiates or responds/)
 	assert.match(source, /\{ id: 'initiator', label: 'Initiator' \}/)
-	assert.match(source, /\{ id: 'responder', label: 'Responder' \}/)
+	assert.match(source, /\{ id: 'responder', label: 'Responder \(experimental\)' \}/)
 	assert.match(source, /label: 'Interface IP Address',[\s\S]*?description: 'Use a reserved or static address.'/)
 	assert.match(
 		source,

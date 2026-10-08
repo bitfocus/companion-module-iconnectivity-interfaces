@@ -11,7 +11,8 @@
 	"bugs": "https://github.com/bitfocus/companion-module-iconnectivity-interfaces/issues",
 	"maintainers": [
 		{
-			"name": "Mike"
+			"name": "Mike Moore",
+			"github": "mikecreates86"
 		}
 	],
 	"runtime": {
@@ -25,6 +26,6 @@
 	},
 	"legacyIds": [],
 	"manufacturer": "iConnectivity",
-	"products": ["PlayAUDIO1U", "PlayAUDIO12", "mioXL", "mioXM", "mio10", "mio4", "mio2", "mio"],
-	"keywords": ["audio", "midi", "failover", "rtp-midi", "sysex"]
+	"products": ["PlayAUDIO1U", "mioXM", "PlayAUDIO12", "mioXL"],
+	"keywords": ["audio", "midi", "rtp-midi", "sysex", "preset", "scene"]
 }

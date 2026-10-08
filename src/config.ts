@@ -87,7 +87,7 @@ export function GetConfigFields(): SomeCompanionConfigField[] {
 			isVisibleExpression: networkVisible,
 			choices: [
 				{ id: 'initiator', label: 'Initiator' },
-				{ id: 'responder', label: 'Responder' },
+				{ id: 'responder', label: 'Responder (experimental)' },
 			],
 		},
 		{
