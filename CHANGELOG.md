@@ -1,8 +1,8 @@
 # Changelog
 
-## First public release (version to be assigned)
+## 1.0.0 (unreleased)
 
-First release through the Bitfocus module store. It is built from Candidate 0.15.2 once that build completes its endurance and recovery testing.
+First release through the Bitfocus module store. It will be built from the Candidate 0.15.2 code once that build completes its endurance and recovery testing.
 
 ### Features
 

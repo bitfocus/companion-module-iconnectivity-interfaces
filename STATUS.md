@@ -14,6 +14,8 @@
 
 ## Recently Completed
 
+- Public release decisions (2026-10-09, user): first public version **1.0.0**, built from the 0.15.2 code once its endurance run passes; LICENSE copyright changed to Mike Moore; internal handoff and release-history files will be published as they are.
+
 - Candidate 0.15.2 endurance in progress (2026-10-09): the user reports the run is going smoothly and reliably so far. Duration, device count and the individual recovery checks (Companion restart, interface power cycle, network interruption, Auracle restart) are not yet reported; record them when the run completes.
 - Public release preparation (2026-10-09): `companion/HELP.md` rewritten for first-time users (setup order, quick start, actions/feedbacks/presets/variables, troubleshooting, advanced settings) with internal terminology removed; public `README.md`; `CHANGELOG.md` with first-release notes. Bitfocus process confirmed: request the repository in #module-development, then tag and submit versions in the Developer Portal.
 
