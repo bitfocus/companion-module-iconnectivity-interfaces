@@ -57,8 +57,10 @@ test('periodic status reads do not rebuild the Companion surface', async () => {
 	try {
 		const before = setup.record.actionDefinitions
 		const reads = setup.device.tngRequests().length
-		await sleep(3600)
-		assert.ok(setup.device.tngRequests().length > reads, 'a periodic status read must have run')
+		// A read is due 3 s after the previous one and is started on the next 1 s poll tick, so allow
+		// up to about 4 s plus scheduling slack on a busy machine.
+		await waitFor(() => setup.device.tngRequests().length > reads, 7000, 'a periodic status read')
+		await sleep(300) // let its replies be applied before checking the surface
 		assert.equal(setup.record.actionDefinitions, before)
 	} finally {
 		await stop(setup)
