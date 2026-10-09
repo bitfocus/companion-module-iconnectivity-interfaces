@@ -2,6 +2,14 @@
 
 Read `AGENTS.md`, `PROJECT_CONTEXT.md`, `README_AI.md` and `STATUS.md` before acting. For protocol or capability work, use `docs/README.md` to select only the relevant focused document.
 
+## Working with the owner (permanent)
+
+- The owner is the project manager, not a developer, and is new to GitHub. Speak in plain, non-technical language: describe outcomes, what changed for the user and what you need from the owner. Avoid GitHub and developer jargon (branches, PRs, CI, commits, merges); if a technical step is unavoidable, explain it in everyday words.
+- Agents do all GitHub work themselves: saving work, opening and merging changes once the automated checks pass, and keeping the records up to date. Never ask the owner to operate GitHub.
+- Ask the owner only for what needs them: testing on the real equipment, approving a version as trusted for live use (Production), decisions about what the module should do, and actions that need the owner's own accounts (for example Bitfocus Slack or the Bitfocus Developer Portal). Ask in plain language, one clear question at a time.
+- The repository front page (`README.md`) must always link to the **Latest test build** download, which every push refreshes with a ready-to-import `.tgz` under a new, never-reused version. Keep that link and the automatic build working.
+- When a change affects how the module behaves with the hardware, give the owner the build to test before calling the work done.
+
 ## Repository map
 
 - `src/`: authoritative TypeScript implementation.
