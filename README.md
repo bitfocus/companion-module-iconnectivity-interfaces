@@ -4,9 +4,9 @@
 
 ## ⬇️ Download the latest version
 
-**[Get the latest build here](https://github.com/mikecreates86/companion-module-iconnectivity/releases/tag/test-build)**: open the link and click the file ending in **`.tgz`**. Then, in Companion, go to the **Modules** page and import that file.
+**[Get the latest version here](https://github.com/mikecreates86/companion-module-iconnectivity/releases/latest)**: open the link, and under **Assets** click the file ending in **`.tgz`**. Then, in Companion, go to the **Modules** page and import that file.
 
-It always holds the newest work and has a new version number every time, so Companion will accept it. For the version trusted for live use, see `STATUS.md`.
+It always holds the newest work, with a higher version number every time, so Companion will accept it. Each release says which version is trusted for live use (also recorded in `STATUS.md`).
 
 ## What it does
 
@@ -47,7 +47,7 @@ corepack yarn package   # build an importable .tgz in pkg/
 
 - `src/`: module source. `src/network/` is the AppleMIDI/RTP-MIDI transport; `src/protocol/` holds the iConnectivity legacy and TNG SysEx codecs.
 - `tests/`: Node test-runner suites, including a loopback fake interface for connection lifecycle tests.
-- Every push builds an importable test package with a unique version and publishes it on the **Latest test build** pre-release.
+- Every change merged to `main` is tested, packaged and published automatically as a numbered **Latest** release (`.github/workflows/release.yaml`). The release notes come from `WHATS_NEW.md`.
 - Protocol notes, capability status and test plans are in [`docs/`](docs/README.md). Release history and procedure are in [`releases/README.md`](releases/README.md).
 
 ## License

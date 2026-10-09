@@ -22,13 +22,15 @@ iconnectivity-interfaces-vX.Y.Z-CANDIDATE.tgz
 
 On promotion, keep the Candidate archive and add a separately named Production archive. Do not delete older archives unless explicitly instructed.
 
-## CI test builds
+## Automatic GitHub releases
 
-Every push to any branch runs `.github/workflows/test-build.yaml`, which tests and packages the module. The newest build is published as a plain `.tgz` on the rolling **Latest test build** pre-release (Releases → `test-build`), whose page always holds only the most recent build; download it and import it into Companion. The same file is also attached to each workflow run under *Artifacts*, which GitHub delivers as a zip.
+Every change merged to `main` runs `.github/workflows/release.yaml`, which tests, lints and packages the module and publishes the `.tgz` as a numbered GitHub release marked **Latest** (tag `vX.Y.Z`, title `X.Y.Z`). The README download link points to `releases/latest`. The release notes are `WHATS_NEW.md` plus install steps.
 
-- Test builds get a unique version from `scripts/set-test-version.mjs`: the next patch number plus the GitHub run number and attempt, e.g. `0.15.3-test.45.1` when `package.json` says `0.15.2`. Run numbers are never reused, so Companion never rejects an import as a duplicate. The version sorts above the last numbered Candidate and below the next one, and the manifest is marked as a pre-release.
-- The version is set only inside the CI checkout and is never committed.
-- Test builds are **not** Candidates or Production. The rolling pre-release is replaced by every push, run artifacts are kept for 30 days, and neither is ever copied into `releases/`. A build that should be tracked is packaged as a normal numbered Candidate under the procedure above.
+- The version is chosen by `scripts/set-release-version.mjs`: the next patch number above every version already published on GitHub (release tags, titles and file names, including the retired `0.15.3-test.N.M` test builds) and `package.json`. A hand-started run may request a specific version such as `1.0.0`; it must be higher than everything published. The build stops with an error, publishing nothing, if the version is not higher or the tag already exists. `scripts/verify-package.mjs` checks the version inside the packaged `.tgz` matches.
+- The version is set only inside the build checkout and is not committed, so `package.json` on `main` can lag behind the published releases. For the Bitfocus store release, set `package.json` and the manifest to the release version in the source itself.
+- A hand-started run on any other branch publishes a pre-release for testing that is not marked Latest.
+- Automatic releases are builds for testing. They do not change the Production or Candidate state; `STATUS.md` remains the record, and each release's notes name the version trusted for live use.
+- The earlier rolling `test-build` pre-release (2026-10-08 to 2026-10-09) is removed by the first automatic release.
 
 ## Archive availability and latest evidence (2026-10-07)
 
