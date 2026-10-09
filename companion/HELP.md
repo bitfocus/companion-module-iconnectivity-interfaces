@@ -18,7 +18,7 @@ Preset number and name are read from the device every three seconds. Changes fro
 
 PlayAUDIO1U Scene A/B feedback follows live device notifications. Setup reads the active DeviceFeature:SceneNumber directly, including after a module restart while the device is already on B. That read cannot overwrite a newer live Scene notification. Scene stays Unknown if no valid reply is received. Scene actions also update the displayed Scene when Companion sends the recall. Test device-originated changes when verifying live feedback.
 
-**Refresh device state** re-reads the preset number, preset name and Scene on demand through the same regular RTP connection (Auracle stays connected). A live notification that arrives during the read still takes precedence. Use it if you suspect Scene feedback missed a change; Scene is otherwise read only at startup and then follows notifications.
+**Refresh device state** re-reads the preset number, preset name and Scene on demand through the same regular RTP connection (Auracle stays connected). A live notification that arrives during the read still takes precedence. Scene otherwise follows live notifications. If nothing has been heard about Scene for 15 seconds (no notification, recall or Scene Program Change), Companion re-reads it once, so a lost notification is corrected within about 15 seconds. A notification or recall that happens while that read is in flight always wins over its reply, and a correction is logged as a warning.
 
 The **Current preset** feedback highlights a button whose preset matches the device-confirmed preset, and the **Device presets** preset category contains ready-made recall buttons for presets 1–8 with that highlight.
 

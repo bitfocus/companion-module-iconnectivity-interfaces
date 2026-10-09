@@ -36,6 +36,9 @@ function harness(t, regular = true) {
 		notificationTimeoutSeconds: 5,
 		regularRtpRetryAt: 0,
 		regularStateReadTransactions: new Map(),
+		sceneChangeSequence: 0,
+		sceneReadSequence: 0,
+		lastSceneKnownAt: 0,
 		networkConnected: true,
 		liveStateMonitoringActive: false,
 		lifecycleGeneration: 1,
@@ -550,4 +553,71 @@ test('missing or invalid startup Scene replies keep Scene unknown', (t) => {
 	assert.equal(h.instance.state.currentScene, 'Unknown')
 	assert.match(h.instance.state.stateMonitoring, /status read timed out.*scene/)
 	assert.equal(h.instance.state.currentPreset, 3)
+})
+
+const isSceneQuery = (m) => m.messageClass === 3 && m.dataClass === 3 && m.content[6] === 4
+
+// One 3-second status refresh: preset read, then name read (which may queue a Scene re-read).
+function refreshPass(h, t) {
+	t.mock.timers.tick(3000)
+	h.instance.poll()
+	h.reply([0x43, 3, 1, 6, 3, 1, 3, 1, 3])
+	h.reply([0x43, 3, 1, 9, 3, 1, 6, 2, ...Buffer.from('Test')])
+}
+
+function runUntilSceneQuery(h, t) {
+	for (let pass = 0; pass < 8; pass++) {
+		refreshPass(h, t)
+		if (isSceneQuery(h.sent.at(-1))) return h.sent.at(-1)
+	}
+	assert.fail('no Scene re-read was sent')
+}
+
+test('a lost Scene notification is corrected by the quiet-interval Scene re-read', (t) => {
+	const h = harness(t)
+	initialState(h)
+	h.reply([0x40, 0, 0x11, 0, 0])
+	assert.equal(h.instance.state.currentScene, 'A')
+	const sceneQuery = runUntilSceneQuery(h, t)
+	// The device moved to B but its notification never arrived.
+	h.reply([0x43, 3, 1, 6, 3, 1, 3, 4, 2], sceneQuery.transactionId)
+	assert.equal(h.instance.state.currentScene, 'B')
+	assert.equal(h.instance.pendingStateReads.size, 0)
+})
+
+test('no Scene re-read is sent while Scene was confirmed within the quiet interval', (t) => {
+	const h = harness(t)
+	initialState(h)
+	h.reply([0x40, 0, 0x11, 0, 0])
+	const before = h.sent.filter(isSceneQuery).length
+	for (let pass = 0; pass < 4; pass++) {
+		refreshPass(h, t)
+		// A notification every 12 seconds keeps Scene confirmed, so no re-read is needed.
+		if (pass === 3) h.reply([0x50, 3, 1, 6, 3, 1, 3, 4, 2])
+	}
+	for (let pass = 0; pass < 4; pass++) refreshPass(h, t)
+	assert.equal(h.sent.filter(isSceneQuery).length, before)
+	assert.equal(h.instance.state.currentScene, 'B')
+})
+
+test('a live notification after a Scene re-read was sent wins over the delayed reply', (t) => {
+	const h = harness(t)
+	initialState(h)
+	h.reply([0x40, 0, 0x11, 0, 0])
+	const sceneQuery = runUntilSceneQuery(h, t)
+	h.reply([0x50, 3, 1, 6, 3, 1, 3, 4, 2])
+	assert.equal(h.instance.state.currentScene, 'B')
+	h.reply([0x43, 3, 1, 6, 3, 1, 3, 4, 1], sceneQuery.transactionId)
+	assert.equal(h.instance.state.currentScene, 'B')
+	assert.equal(h.instance.pendingStateReads.size, 0)
+})
+
+test('a Companion Scene recall after a Scene re-read was sent is not rolled back', (t) => {
+	const h = harness(t)
+	initialState(h)
+	h.reply([0x40, 0, 0x11, 0, 0])
+	const sceneQuery = runUntilSceneQuery(h, t)
+	h.instance.recallScene('B')
+	h.reply([0x43, 3, 1, 6, 3, 1, 3, 4, 1], sceneQuery.transactionId)
+	assert.equal(h.instance.state.currentScene, 'B')
 })
