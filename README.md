@@ -8,6 +8,8 @@
 
 It always holds the newest work and has a new version number every time, so Companion will accept it. For the version trusted for live use, see `STATUS.md`.
 
+## What it does
+
 - Recall device presets, PlayAUDIO Scene A/B and mixer snapshots.
 - Live feedback of the device's current preset (with name) and Scene, confirmed by the device rather than assumed from the last button press.
 - Send and receive MIDI over Ethernet, with Generic MIDI-compatible variables and MIDI Clock BPM.
