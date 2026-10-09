@@ -1,0 +1,119 @@
+name: Release
+
+# Builds the ready-to-import Companion module (.tgz) and publishes it as a
+# numbered GitHub release. Every change merged to main becomes the "Latest"
+# release, which the README's download link points to.
+#
+# The version is chosen by scripts/set-release-version.mjs: the next patch
+# number above every version already published and package.json, so Companion
+# never refuses the import. A run started by hand can ask for a specific,
+# higher version (for example 1.0.0). A hand-started run on any other branch
+# publishes a pre-release for testing that is not marked Latest.
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (leave empty for the next number automatically)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+# One release at a time across the whole repository, so two runs can never pick the same number.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+      - name: Use Node.js from .node-version
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+      - name: Prepare Environment
+        run: corepack enable
+      - name: Install dependencies
+        run: yarn install --immutable
+      - name: List versions already published
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --jq '.[] | .tag_name, .name, (.assets[].name)'
+            git ls-remote --tags origin | sed 's#.*refs/tags/##; s#\^{}$##'
+          } > "$RUNNER_TEMP/published.txt"
+          cat "$RUNNER_TEMP/published.txt"
+      - name: Choose the new version
+        id: version
+        env:
+          REQUESTED: ${{ inputs.version }}
+        run: node scripts/set-release-version.mjs "$RUNNER_TEMP/published.txt" "$REQUESTED" >> "$GITHUB_OUTPUT"
+      - name: Run tests
+        run: yarn test
+      - name: Run lint
+        run: yarn lint
+      - name: Package
+        run: yarn package ${{ github.ref_name != 'main' && '--prerelease' || '' }}
+      - name: Verify package
+        run: yarn package:verify
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          PREVIOUS: ${{ steps.version.outputs.previous }}
+          IS_MAIN: ${{ github.ref_name == 'main' }}
+        run: |
+          tag="v${VERSION}"
+          file="pkg/iconnectivity-interfaces-${VERSION}.tgz"
+          # Last guard: never reuse or overwrite an existing version.
+          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null || gh release view "$tag" >/dev/null 2>&1; then
+            echo "::error::Version ${VERSION} already exists. Nothing was published."
+            exit 1
+          fi
+          {
+            cat WHATS_NEW.md
+            echo
+            echo "## How to install"
+            echo
+            echo "1. Under **Assets** below, click **iconnectivity-interfaces-${VERSION}.tgz** to download it."
+            echo "2. In Companion, open the **Modules** page and import that file."
+            echo "3. Select version ${VERSION} on your iConnectivity connection."
+            echo
+            if [ "$IS_MAIN" != "true" ]; then
+              echo "_Test version from \`${GITHUB_REF_NAME}\`. It is not the Latest release._"
+              echo
+            fi
+            echo "_Version ${VERSION}, up from ${PREVIOUS}. Built automatically from ${GITHUB_SHA::7}._"
+          } > "$RUNNER_TEMP/notes.md"
+          if [ "$IS_MAIN" = "true" ]; then
+            flags=(--latest)
+          else
+            flags=(--prerelease --latest=false)
+          fi
+          gh release create "$tag" "$file" --target "$GITHUB_SHA" --title "$VERSION" --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}"
+      - name: Remove the old rolling test build
+        # Replaced by numbered releases; its only file is an older test version.
+        if: github.ref_name == 'main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view test-build >/dev/null 2>&1; then
+            gh release delete test-build --cleanup-tag --yes
+          fi
+      - name: Summary
+        run: |
+          {
+            echo "### Version \`${{ steps.version.outputs.version }}\` is ready, up from \`${{ steps.version.outputs.previous }}\`"
+            echo
+            echo "Download it from the [release page](${{ github.server_url }}/${{ github.repository }}/releases/tag/v${{ steps.version.outputs.version }})."
+          } >> "$GITHUB_STEP_SUMMARY"
