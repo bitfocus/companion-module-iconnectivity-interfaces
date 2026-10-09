@@ -1,78 +1,88 @@
 ## iConnectivity Interfaces
 
-### Ethernet setup
+Control and monitor iConnectivity PlayAUDIO and mio interfaces over Ethernet: recall presets and PlayAUDIO Scenes, see the device's current preset and Scene, and send and receive MIDI. No extra network-MIDI software is needed, and Auracle can stay connected at the same time.
 
-Choose **RTP MIDI**, leave **RTP Role** as **Initiator**, and enter the interface IP address and the regular **Interface RTP Port** shown in Auracle (normally 5004). Use a static or DHCP-reserved IP address. The regular RTP port must differ from the dedicated configuration port (normally 5002).
+**Tested on hardware:** PlayAUDIO1U and mioXM over Ethernet. PlayAUDIO12 and mioXL support is included but has not been tested on hardware; please report problems with the module log.
 
-For **PlayAUDIO1U and mioXM**, identity and status monitoring use this regular RTP connection automatically. Auracle can remain connected over Ethernet: Companion leaves the dedicated configuration port available. There is no monitoring checkbox to enable for this setup.
+### Before you start: Preset Selector
 
-Select **Interface model** to keep model-specific controls available while the device is offline. **Auto-detect** waits for discovery before exposing those controls and uses regular-RTP status discovery. An explicitly selected model that differs from the detected device produces a configuration error and blocks model-specific commands. Select PlayAUDIO12 or mioXL explicitly to retain their configuration-port discovery method; their regular-RTP monitoring has not been qualified.
+Preset, Scene and mixer snapshot recall use MIDI Program Change, so the interface must be set up to receive them. Do this once per interface:
 
-PlayAUDIO1U and mioXM are the hardware-tested models. PlayAUDIO12 and mioXL support is implemented but has not been tested on hardware with this module; report problems with the module log.
+1. Connect the interface to a computer over USB and open iConnectivity **Preset Selector**.
+2. Assign the receive channels for presets (and, on PlayAUDIO, Scene A/B and mixer snapshots if you use them).
+3. Save the configuration to the interface.
 
-The RTP name appears in Auracle. Device-incompatible punctuation is converted to safe ASCII automatically. Each module instance uses independent local RTP ports.
+Companion only sends on these channels; it never changes them. After this, Companion can work over Ethernet only.
 
-### Device state and recalls
+### Quick start (Ethernet)
 
-Preset number and name are read from the device every three seconds. Changes from Auracle or the front panel can take a few seconds to appear in Companion. A Companion preset recall shows Unknown until the device confirms its active preset; sending a command or observing an ordinary Program Change does not confirm that it loaded. Failed preset/name reads clear stale values, report a timeout, and wait 30 seconds before retrying. Delayed replies to cancelled reads and names belonging to another preset are ignored.
+1. Give the interface a static or DHCP-reserved IP address.
+2. Add the **iConnectivity Interfaces** connection and choose **RTP MIDI** with **RTP Role: Initiator**.
+3. Enter the interface IP address and its **Interface RTP Port** as shown in Auracle (normally `5004`). This must be a regular RTP port, not the configuration port (normally `5002`).
+4. Choose your **Interface model**. Choosing it (rather than Auto-detect) keeps the model's actions and feedbacks available even while the interface is offline.
+5. Set **Preset recall channel** (and the optional PlayAUDIO **Scene A/B** and **mixer snapshot** channels) to match Preset Selector. Leave an optional channel on **Disabled / Not used** if you don't use it. Each selector needs its own channel.
 
-PlayAUDIO1U Scene A/B feedback follows live device notifications. Setup reads the active DeviceFeature:SceneNumber directly, including after a module restart while the device is already on B. That read cannot overwrite a newer live Scene notification. Scene stays Unknown if no valid reply is received. Scene actions also update the displayed Scene when Companion sends the recall. Test device-originated changes when verifying live feedback.
+The connection turns green when the RTP session is up. The `state_monitoring` variable shows `Regular RTP: live notifications registered` once Companion is following the device's preset and Scene.
 
-**Refresh device state** re-reads the preset number, preset name and Scene on demand through the same regular RTP connection (Auracle stays connected). A live notification that arrives during the read still takes precedence. Scene otherwise follows live notifications. If nothing has been heard about Scene for 15 seconds (no notification, recall or Scene Program Change), Companion re-reads it once, so a lost notification is corrected within about 15 seconds. A notification or recall that happens while that read is in flight always wins over its reply, and a correction is logged as a warning.
+### What you get
 
-The **Current preset** feedback highlights a button whose preset matches the device-confirmed preset, and the **Device presets** preset category contains ready-made recall buttons for presets 1–8 with that highlight.
+**Actions**
 
-The preset, Scene A/B and mixer snapshot selectors each need their own MIDI channel. If the Scene or mixer snapshot channel matches the preset channel (or the two match each other), one Program Change would trigger both, so the module logs a warning and refuses that recall action until the channels differ.
+- **Recall preset** (1–128), **PlayAUDIO: Recall Scene A or B**, and **PlayAUDIO: Recall mixer snapshot** (when its channel is set).
+- **Refresh device state**: re-reads the current preset, preset name and Scene.
+- MIDI: Note On/Off, timed note press, Control Change, Program Change, aftertouch, pitch bend, Start/Stop/Continue, Clock, raw hex bytes and SysEx. A channel outside 1–16 is rejected with an error instead of being sent as a different message; note and value fields are limited to 0–127.
 
-Mixer snapshot state starts as Unknown until observed from an action, matching Program Change or device notification. Configure **PlayAUDIO mixer snapshot channel** only when using that selector. Mixer snapshot monitoring and recall still require their own hardware validation.
+**Feedbacks**
 
-**Device state monitoring status** (`state_monitoring`) reports discovery, read failures and notification registration. `Regular RTP: live notifications registered` confirms the subscription was accepted; verify actual changes when commissioning a setup. Normal RTP online status alone does not prove device feedback is working.
+- **Device online**, **Current preset**, **Current Scene A/B** and **Current mixer snapshot**.
 
-At connection startup, Companion starts RTP clock synchronization immediately and allows one second for the session to settle before requesting TNG identity. Regular-RTP discovery then waits up to five seconds and retries two seconds after a timeout. If the device does not answer, Companion reports the failure and keeps ordinary MIDI available; it does not take Auracle's configuration port as a fallback. Restarting the module connection with Auracle connected has been tested on PlayAUDIO1U; restart/recovery and longer-session qualification remain ongoing.
+PlayAUDIO12 additionally offers failover arm/disarm/clear, failover and host-health feedbacks, audio-signal feedback, meter variables and its legacy snapshot actions (not yet tested on hardware).
 
-### Preset Selector prerequisite
+**Presets (ready-made buttons)**
 
-Preset, Scene and mixer snapshot reception must first be configured on the interface using iConnectivity **Preset Selector**. Connect the interface to a computer over USB, assign the receive channels, and save the device configuration. This is normally a one-time setup; Companion can remain Ethernet-only afterward.
+- **Device presets**: recall buttons for presets 1–8 that light up on the active preset.
+- **Status**: a device status button and Scene A/B buttons on PlayAUDIO.
 
-Match the module's **Preset recall Channel**, optional **PlayAUDIO Scene A/B channel**, and optional **PlayAUDIO mixer snapshot channel** to those saved settings. Leave an unused optional channel at `0`. mio devices do not use Scene A/B. Companion does not enable, reroute or overwrite the device's selector settings. If recalls do nothing, verify Preset Selector and routing from the selected RTP port to the device control input.
+**Variables**
 
-Preset, Scene and snapshot actions use native MIDI Program Change. Displayed values are one-based. Older module buttons using configuration-session Scene IDs 1 and 2 are automatically translated to the native Scene action.
+- Device identity, `online`, `state_monitoring`, `current_preset`, `current_preset_name`, `current_scene` and `current_mixer_snapshot`.
+- Incoming and outgoing MIDI (type, channel, number, value, note name, raw bytes, summary, timestamp) and MIDI Clock BPM.
+- Generic MIDI-compatible variables (`midiIn`, `lastMessage`, `lastNote`, `lastChannel`, `lastMsgType`, `lastValue`) for migrating from the Generic MIDI module. `midiIn` pulses for every incoming message and can drive a **Variable changed** trigger; messages look like `cc_12_102_127`.
 
-### Advanced settings and compatibility
+### How device state stays accurate
 
-Normal PlayAUDIO1U and mioXM Ethernet setups need no advanced changes.
+- **Preset:** the device is asked for its active preset and name every three seconds, so changes from Auracle or the front panel appear within a few seconds. After a Companion recall the preset shows **Unknown** until the device confirms what loaded.
+- **Scene (PlayAUDIO1U):** follows the device's live change notifications and is read at startup, including after a restart while the device is already on B. If nothing has been heard about Scene for 15 seconds, Companion checks it once, so a missed notification is corrected within about 15 seconds. A live change always wins over that check; a correction is logged as a warning.
+- **Mixer snapshot:** shows **Unknown** until it is seen from an action, a matching Program Change or a device notification. Mixer snapshot support has not yet been tested on hardware.
+- If a read fails, the value is cleared rather than left stale, and Companion retries.
 
-**Show diagnostic variables** defaults off for new connections. It exposes internal command/response counters and raw messages, MIDI traffic/queue counters, RTP connection details, product/protocol/capability details, last acknowledgement, and Clock pulse count/timestamp. Monitoring and MIDI processing continue when these variables are hidden. Online/identity/monitoring status, device identity, preset/Scene/snapshot state, normal MIDI trigger variables and Clock BPM remain available. Upgraded connections keep diagnostics enabled to preserve existing variable references; turn this option off to simplify their variable list.
+### Troubleshooting
 
-- **Initiator local RTP-MIDI control port**: leave at `0` for automatic assignment; a specified port must be even.
-- **Device status connection**: leave on **Automatic**. **Configuration port (compatibility)** restores the older discovery path for troubleshooting or other devices.
-- **Device discovery/configuration port** and **Local discovery control port** appear for the configuration-port path. Normally use remote port 5002 and local port `0`.
-- **Monitor changes through configuration port** appears only for that compatibility path. It retains the configuration connection for TNG notifications and may prevent Auracle from connecting over Ethernet. With it disabled, the TNG configuration connection is released after initial reads. This option has no effect on automatic regular-RTP monitoring.
-- **Status refresh interval (milliseconds)** controls the module's polling scheduler. The default is 1000 ms; automatic preset reads are scheduled at least three seconds apart.
-- **Legacy audio meter port ID** applies only to implemented legacy meter features, such as PlayAUDIO12, and has no effect on TNG devices.
+- **Retries right after updating the module or changing settings:** restart the connection once. The interface may still be holding the previous session.
+- **Recalls do nothing:** check Preset Selector's saved channels and that the module's channels match, and that the RTP port you chose is routed to the interface's control input.
+- **Online but no preset/Scene feedback:** check `state_monitoring`. "No TNG identity reply" means the interface did not answer status requests on that port; check the port number and power-cycle the interface if needed. Companion never takes Auracle's configuration port as a fallback.
+- **Interface unresponsive in Auracle or Companion:** power-cycling the interface has cleared temporary lock-ups in testing.
 
-Explicit PlayAUDIO12 and mioXL selections retain their existing configuration-port path. PlayAUDIO12 retains its legacy connection for implemented status polling. If using Auto-detect with a legacy interface, select its model or choose the advanced configuration-port compatibility method.
+### Advanced settings
+
+Normal PlayAUDIO1U and mioXM setups need none of these.
+
+- **Show diagnostic variables**: adds internal counters, raw messages and RTP details for troubleshooting. Off for new connections; connections upgraded from older versions keep it on so existing references keep working.
+- **Initiator local RTP-MIDI control port**: leave at `0` for automatic; a fixed port must be even.
+- **Device status connection**: leave on **Automatic**. **Configuration port (compatibility)** uses the older discovery method through the configuration port and shows extra options. **Monitor changes through configuration port** keeps that port open for live updates and **may stop Auracle from connecting over Ethernet**.
+- **Status refresh interval**: the module's polling interval (default 1000 ms).
+- **Legacy audio meter port ID**: for PlayAUDIO12 meters only.
+- PlayAUDIO12 and mioXL, when selected explicitly, use the configuration-port method.
 
 ### Other connection methods
 
-Choose **USB MIDI** only when the interface is physically connected to the Companion computer; select the local input and output ports. Network-only configurations do not depend on USB port names. USB behavior and platform qualification remain separate from the tested Ethernet path.
+- **USB MIDI**: for an interface connected directly to the Companion computer; pick its input and output ports. Not yet tested on hardware.
+- **Responder (experimental)**: the interface connects to Companion on a fixed, even **Companion RTP Port**. It carries MIDI only, without device state monitoring. Use **Initiator** for normal operation.
 
-**Responder (experimental)** requires a fixed, even **Companion RTP Port**. Configure the device to connect to the Companion computer's IP address on that port. Responder mode carries MIDI but does not have a complete identity/configuration discovery path, so device state monitoring is unavailable. Use **Initiator** for normal operation.
+### Good to know
 
-The normal RTP connection retries invitations every two seconds and detects loss of an established session after about seven seconds without traffic. Configuration-port discovery opens only after the user RTP session connects, times out after ten seconds, and backs off 30 seconds before retrying.
-
-### MIDI variables and actions
-
-Incoming variables describe traffic observed on the selected user RTP session; other device ports must be routed to it to be visible. Internal discovery/status SysEx has separate counters and last-message variables, so it does not overwrite user MIDI events.
-
-User MIDI variables include type, channel, number, value, note name, raw bytes, summary and timestamp for both directions. Generic MIDI-compatible variables include `midiIn`, `lastMessage`, `lastNote`, `lastChannel`, `lastMsgType` and `lastValue`. `midiIn` pulses for each actionable incoming message and can drive a Companion **Variable changed** trigger. Message strings use forms such as `cc_12_102_127`.
-
-MIDI actions include Note On/Off, timed note press, Control Change, Program Change, polyphonic aftertouch, channel pressure, pitch bend, Start/Stop/Continue, Clock, raw hexadecimal MIDI and validated hexadecimal SysEx. A channel outside 1–16 (for example from an expression) is rejected with an error rather than sent as a different message; note, controller and value fields are clamped to 0–127.
-
-Incoming RTP packets that carry several MIDI messages are split into individual messages in order, so a device notification and a Program Change sent together are both handled. Packets that do not follow the RTP-MIDI command-list format are passed through unchanged, as in earlier versions.
-
-**Receive/analyze MIDI Clock** controls Clock BPM and receive-state variables. Clock pulses are counted individually; variable publication is coalesced. Clock and Active Sensing are separated from actionable MIDI. Clock stops after 1.5 seconds without a pulse and BPM returns to zero. Notes, CC, Program Change and transport events remain ordered with an individual receive pulse. A bounded queue exposes queue depth and dropped-message diagnostics.
-
-### Validation scope
-
-Concurrent Ethernet Auracle access, preset feedback, Scene feedback where supported, and module-connection restart were user-confirmed on PlayAUDIO1U and mioXM during the regular-RTP testing. Mixer snapshots, automatic failover, interface power-cycle recovery, longer-session endurance, other models and supported-platform release qualification remain separate checks. The release Candidate is not promoted to Production automatically.
+- Displayed preset, Scene and snapshot numbers start at 1 (MIDI Program Change values start at 0).
+- Incoming MIDI variables show traffic on the selected RTP session only; route other ports to it to see them.
+- MIDI Clock is counted on every pulse but its variables update a few times a second. Clock is considered stopped after 1.5 s without a pulse. Turn off **Receive/analyze MIDI Clock** if you don't need it.
+- An RTP session is re-invited every two seconds while offline and is considered lost after about seven seconds without traffic.
+- Buttons made with older versions of this module that used Scene IDs 1 and 2 are translated to the current Scene action automatically.
