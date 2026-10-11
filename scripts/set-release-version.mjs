@@ -3,9 +3,10 @@
 //
 // Usage: node scripts/set-release-version.mjs <published.txt> [requested version]
 // published.txt lists every release tag, title and file name already on GitHub,
-// one per line. The new version is the next patch number above the highest of
-// those and package.json, or the requested version if it is higher still. The
-// script stops with an error rather than produce a version Companion could refuse.
+// one per line. The new version is package.json's own version when it is higher
+// than all of those, otherwise the next patch number above the highest of them,
+// or the requested version. The script stops with an error rather than produce
+// a version Companion could refuse.
 import { readFile, writeFile } from 'node:fs/promises'
 import { chooseReleaseVersion } from './lib/release-version.mjs'
 
