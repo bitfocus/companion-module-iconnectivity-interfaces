@@ -7,6 +7,7 @@
 - `CAPABILITY_MATRIX.md`: implementation and hardware-validation status by device; read before changing the public control surface.
 - `IMPLEMENTATION_PLAN.md`: prioritized public-beta gates and deferred work.
 - `SOURCES.md`: authoritative iConnectivity and Bitfocus references.
+- `BITFOCUS_REPOSITORY_REQUEST.md`: draft Bitfocus Developer Portal repository request and pre-submission checks.
 
 Root handoff state belongs in `README_AI.md` and `STATUS.md`; do not duplicate it here.
 

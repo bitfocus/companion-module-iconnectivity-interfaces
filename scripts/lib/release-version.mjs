@@ -61,35 +61,46 @@ export function nextPatch(version) {
 
 /**
  * Chooses the version for a new release.
+ *
+ * package.json's own version is used when it is plain and higher than everything already published,
+ * so a deliberate bump (for example to 1.0.0 for the Bitfocus store) is released under exactly that
+ * number, matching the committed source. Otherwise the next patch number above the highest
+ * published version is used.
  * @param {string} packageVersion version currently in package.json
  * @param {string[]} published every release tag, title and file name already on GitHub
- * @param {string} [requested] an explicit version; it must be plain X.Y.Z and higher than everything else
+ * @param {string} [requested] an explicit version; it must be plain X.Y.Z, higher than everything
+ *   published and not lower than package.json
  * @returns {{ version: string, previous: string }}
  */
 export function chooseReleaseVersion(packageVersion, published, requested = '') {
 	const current = parseVersion(packageVersion)
 	if (!current) throw new Error(`package.json version "${packageVersion}" is not a valid version`)
 
-	let highest = current
+	let highest
 	for (const text of published) {
 		for (const version of versionsIn(text)) {
-			if (compareVersions(version, highest) > 0) highest = version
+			if (!highest || compareVersions(version, highest) > 0) highest = version
 		}
 	}
+	const abovePublished = (version) => !highest || compareVersions(version, highest) > 0
 
 	let chosen
 	if (requested.trim()) {
 		chosen = parseVersion(requested)
 		if (!chosen || chosen.prerelease.length)
 			throw new Error(`Requested version "${requested}" must be a plain number such as 1.0.0`)
+	} else if (!current.prerelease.length && abovePublished(current)) {
+		chosen = current
 	} else {
-		chosen = nextPatch(highest)
+		chosen = nextPatch(highest && compareVersions(highest, current) > 0 ? highest : current)
 	}
 
-	if (compareVersions(chosen, highest) <= 0)
+	if (!abovePublished(chosen))
 		throw new Error(
 			`Version ${formatVersion(chosen)} is not higher than ${formatVersion(highest)}, which already exists. ` +
 				'Companion would refuse it, so nothing was published.',
 		)
-	return { version: formatVersion(chosen), previous: formatVersion(highest) }
+	if (compareVersions(chosen, current) < 0)
+		throw new Error(`Version ${formatVersion(chosen)} is lower than package.json (${packageVersion}).`)
+	return { version: formatVersion(chosen), previous: highest ? formatVersion(highest) : 'none' }
 }

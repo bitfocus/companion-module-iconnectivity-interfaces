@@ -33,11 +33,15 @@ test('first release goes above the old test builds', () => {
 
 test('each later release bumps the last number above the highest release', () => {
 	assert.equal(chooseReleaseVersion('0.15.2', ['v0.15.3', 'v0.15.4']).version, '0.15.5')
-	assert.equal(chooseReleaseVersion('0.15.2', []).version, '0.15.3')
+	assert.equal(chooseReleaseVersion('0.15.4', ['v0.15.3', 'v0.15.4']).version, '0.15.5')
 })
 
-test('never goes below package.json', () => {
-	assert.equal(chooseReleaseVersion('0.16.0', ['v0.15.9']).version, '0.16.1')
+test('releases a deliberate package.json bump under exactly that number', () => {
+	assert.deepEqual(chooseReleaseVersion('1.0.0', ['v0.15.3', 'v0.15.4']), { version: '1.0.0', previous: '0.15.4' })
+	assert.equal(chooseReleaseVersion('0.16.0', ['v0.15.9']).version, '0.16.0')
+	assert.equal(chooseReleaseVersion('0.15.2', []).version, '0.15.2')
+	// Once published, the next run moves on.
+	assert.equal(chooseReleaseVersion('1.0.0', ['v1.0.0']).version, '1.0.1')
 })
 
 test('accepts a higher requested version such as 1.0.0', () => {
@@ -47,6 +51,7 @@ test('accepts a higher requested version such as 1.0.0', () => {
 test('refuses a requested version that is not higher', () => {
 	assert.throws(() => chooseReleaseVersion('0.15.2', ['v0.15.7'], '0.15.7'), /not higher than 0\.15\.7/)
 	assert.throws(() => chooseReleaseVersion('0.15.2', ['v0.15.7'], '0.15.5'), /not higher/)
-	assert.throws(() => chooseReleaseVersion('0.15.2', [], '0.15.2'), /not higher/)
+	assert.throws(() => chooseReleaseVersion('0.15.2', ['v0.15.2'], '0.15.2'), /not higher/)
+	assert.throws(() => chooseReleaseVersion('1.0.0', ['v0.15.7'], '0.16.0'), /lower than package\.json/)
 	assert.throws(() => chooseReleaseVersion('0.15.2', [], '1.0.0-beta.1'), /plain number/)
 })

@@ -4,9 +4,10 @@ name: Release
 # numbered GitHub release. Every change merged to main becomes the "Latest"
 # release, which the README's download link points to.
 #
-# The version is chosen by scripts/set-release-version.mjs: the next patch
-# number above every version already published and package.json, so Companion
-# never refuses the import. A run started by hand can ask for a specific,
+# The version is chosen by scripts/set-release-version.mjs: package.json's own
+# version if it is higher than everything already published (a deliberate bump
+# such as 1.0.0), otherwise the next patch number above the highest published
+# version, so Companion never refuses the import. A run started by hand can ask for a specific,
 # higher version (for example 1.0.0). A hand-started run on any other branch
 # publishes a pre-release for testing that is not marked Latest.
 on:
