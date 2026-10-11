@@ -44,7 +44,7 @@ The AppleMIDI integration test opens local UDP sockets. Run it in an environment
 
 ## GitHub and cloud workflow
 
-- The private GitHub repository `mikecreates86/companion-module-iconnectivity` is the source of truth. `main` is the known-good development baseline; start changes on a focused `codex/` branch and merge only after appropriate checks pass.
+- The GitHub repository `mikecreates86/companion-module-iconnectivity` (public since 2026-10-11) is the source of truth. `main` is the known-good development baseline; start changes on a focused `codex/` branch and merge only after appropriate checks pass.
 - A clean clone must be sufficient for source development. Do not depend on files from `captures/`, generated output, retained package archives, personal Companion exports or machine-specific configuration.
 - Install from the committed `yarn.lock` with Node 22.20.x and Corepack/Yarn 4. Do not replace Yarn with npm or commit a `package-lock.json`.
 - Before considering a source change complete, run `yarn test` and `yarn lint`. Also run `yarn package` and `yarn package:verify` when packaging behavior or release readiness is affected.

@@ -34,7 +34,11 @@ There is no Companion module for iConnectivity hardware today. The Generic MIDI 
 https://github.com/mikecreates86/companion-module-iconnectivity
 ```
 
-This repository is private, so Bitfocus reviewers cannot open the link until it is made public or they are given access.
+The owner made this repository public on 2026-10-11 so Bitfocus reviewers can open it.
+
+## Template
+
+Choose **None**. This module already has its own code and history, which will be pushed into the new Bitfocus repository; a template would add a starter commit that conflicts with it. The code is TypeScript if the form asks.
 
 ## GitHub username
 
@@ -45,7 +49,7 @@ mikecreates86
 ## Pre-submission checks (2026-10-11)
 
 - No church or venue names, private IP addresses, email addresses, device serial numbers, credentials or captures in the current files or in the built package. The only "church" matches are a general statement of the intended audience in `PROJECT_CONTEXT.md` and a General MIDI instrument name ("CHURCH_ORGAN") inside a bundled MIDI library.
-- Git history contains one private example address (`172.16.50.22`, a settings-field example in the first commits from 2026-08-20 and 2026-09-17, later removed). It is a private-range address and cannot be reached from the internet. Publishing the repository publishes this history; the owner decides whether to keep it or publish a fresh copy without it.
+- Git history contains one private example address (`172.16.50.22`, a settings-field example in the first commits from 2026-08-20 and 2026-09-17, later removed). It is a private-range address and cannot be reached from the internet. It was published with the history when the owner made the repository public on 2026-10-11.
 - `yarn test` (99 tests), `yarn lint`, `yarn package` and `yarn package:verify` pass. The packaged module contains only the built code, the manifest, the help file and native MIDI libraries.
-- Version: the source says 0.15.2. The latest published download is 0.15.3, the same code. The first store version is 1.0.0. It will be set in `package.json` and the manifest once the owner approves 0.15.2 for live use, and the release build then publishes exactly `v1.0.0` for submission.
+- Version: the source says 0.15.2. The latest published download is 0.15.4, the same code (0.15.5 once this record update is published). The first store version is 1.0.0. It will be set in `package.json` and the manifest once the owner approves 0.15.2 for live use, and the release build then publishes exactly `v1.0.0` for submission.
 - No existing Bitfocus repository matches "iconnectivity" or "playaudio", and `bitfocus/companion-module-iconnectivity-interfaces` does not exist yet.
