@@ -31,10 +31,10 @@ There is no Companion module for iConnectivity hardware today. The Generic MIDI 
 ## Link to current code
 
 ```text
-https://github.com/mikecreates86/companion-module-iconnectivity
+https://github.com/mikecreates86/companion-module-iconnectivity-interfaces
 ```
 
-The owner made this repository public on 2026-10-11 so Bitfocus reviewers can open it.
+The owner made this repository public on 2026-10-11 so Bitfocus reviewers can open it, and renamed it from `companion-module-iconnectivity` on 2026-10-15 so it matches the Bitfocus rule that the repository name is `companion-module-<manifest id>`. The old URL, used in the submitted request, redirects here.
 
 ## Template
 

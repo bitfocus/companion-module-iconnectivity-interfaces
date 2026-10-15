@@ -4,7 +4,7 @@
 
 ## ⬇️ Download the latest version
 
-**[Get the latest version here](https://github.com/mikecreates86/companion-module-iconnectivity/releases/latest)**: open the link, and under **Assets** click the file ending in **`.tgz`**. Then, in Companion, go to the **Modules** page and import that file.
+**[Get the latest version here](https://github.com/mikecreates86/companion-module-iconnectivity-interfaces/releases/latest)**: open the link, and under **Assets** click the file ending in **`.tgz`**. Then, in Companion, go to the **Modules** page and import that file.
 
 It always holds the newest work, with a higher version number every time, so Companion will accept it. Each release says which version is trusted for live use (also recorded in `STATUS.md`).
 
