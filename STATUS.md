@@ -14,6 +14,8 @@
 
 ## Recently Completed
 
+- Bitfocus repository (2026-10-25): Bitfocus approved the request and created `bitfocus/companion-module-iconnectivity-interfaces`, empty (no template). Plan: the owner's working copy `mikecreates86/companion-module-iconnectivity-interfaces` stays the development home and the test-download page; `main` is copied to the Bitfocus repository, and store versions are tagged there (`v1.0.0` first, after the owner approves 0.15.2 for live use) and submitted in the Developer Portal. The release workflow now runs only in the owner's copy.
+
 - Public release decisions (2026-10-09, user): first public version **1.0.0**, built from the 0.15.2 code once its endurance run passes; LICENSE copyright changed to Mike Moore; internal handoff and release-history files will be published as they are.
 
 - Candidate 0.15.2 endurance in progress (2026-10-09): the user reports the run is going smoothly and reliably so far. Duration, device count and the individual recovery checks (Companion restart, interface power cycle, network interruption, Auracle restart) are not yet reported; record them when the run completes.

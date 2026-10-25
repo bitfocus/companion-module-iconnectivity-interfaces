@@ -32,6 +32,11 @@ concurrency:
 jobs:
   release:
     name: Build and publish release
+    # Test downloads are published only from the owner's working copy. The
+    # Bitfocus copy (bitfocus/companion-module-iconnectivity-interfaces) receives
+    # store versions, which Bitfocus builds from v-tags through its Developer
+    # Portal; publishing there would also restart the version numbering.
+    if: github.repository == 'mikecreates86/companion-module-iconnectivity-interfaces'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
