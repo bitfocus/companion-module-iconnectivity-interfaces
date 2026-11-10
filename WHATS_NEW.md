@@ -1,6 +1,6 @@
 ## What's new
 
-- No change to how the module works with your equipment: the module code is the same as 0.15.2–0.15.6.
-- Behind the scenes: preparation for copying the module to its new official home on Bitfocus. Test downloads keep coming from this page.
+- Version 1.0.0, the first official release through the Bitfocus module store.
+- No change to how the module works with your equipment: the module code is the same as 0.15.3, which has run reliably in live use.
 
-**Trusted for live use:** 0.14.22. This version is being tested and is not yet approved for live use.
+**Trusted for live use:** 1.0.0 (same module code as 0.15.3).

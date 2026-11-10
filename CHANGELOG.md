@@ -1,8 +1,8 @@
 # Changelog
 
-## 1.0.0 (unreleased)
+## 1.0.0 (2026-11-10)
 
-First release through the Bitfocus module store. It will be built from the Candidate 0.15.2 code once that build completes its endurance and recovery testing.
+First release through the Bitfocus module store. The module code is the same as 0.15.3 (and Candidate 0.15.2), which the owner has run in live use without issues.
 
 ### Features
 
