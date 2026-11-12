@@ -104,3 +104,38 @@ export function chooseReleaseVersion(packageVersion, published, requested = '') 
 		throw new Error(`Version ${formatVersion(chosen)} is lower than package.json (${packageVersion}).`)
 	return { version: formatVersion(chosen), previous: highest ? formatVersion(highest) : 'none' }
 }
+
+/**
+ * Chooses the version for a test build published between store versions: the next patch above
+ * package.json with a "-test.N" suffix, N one higher than any earlier test build of that patch.
+ * It sorts above the store version in package.json, so Companion accepts it over that version, and
+ * below the next store version, so that one replaces it.
+ * @param {string} packageVersion the store version currently in package.json (plain X.Y.Z)
+ * @param {string[]} published every release tag, title and file name already on GitHub
+ * @returns {{ version: string, previous: string }}
+ */
+export function chooseTestVersion(packageVersion, published) {
+	const current = parseVersion(packageVersion)
+	if (!current || current.prerelease.length)
+		throw new Error(`package.json version "${packageVersion}" must be a plain number such as 1.0.1`)
+	const base = nextPatch(current)
+
+	let highest
+	let count = 0
+	for (const text of published) {
+		for (const version of versionsIn(text)) {
+			if (!highest || compareVersions(version, highest) > 0) highest = version
+			const sameBase = version.major === base.major && version.minor === base.minor && version.patch === base.patch
+			const number = Number(version.prerelease[1])
+			if (sameBase && version.prerelease[0] === 'test' && Number.isInteger(number) && number > count) count = number
+		}
+	}
+
+	const chosen = { ...base, prerelease: ['test', String(count + 1)] }
+	if (highest && compareVersions(chosen, highest) <= 0)
+		throw new Error(
+			`Test version ${formatVersion(chosen)} is not higher than ${formatVersion(highest)}, which already exists. ` +
+				'Raise package.json to the newest store version first; nothing was published.',
+		)
+	return { version: formatVersion(chosen), previous: highest ? formatVersion(highest) : 'none' }
+}

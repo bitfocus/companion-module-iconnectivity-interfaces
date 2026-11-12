@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { chooseReleaseVersion, compareVersions, parseVersion, versionsIn } from '../scripts/lib/release-version.mjs'
+import {
+	chooseReleaseVersion,
+	chooseTestVersion,
+	compareVersions,
+	parseVersion,
+	versionsIn,
+} from '../scripts/lib/release-version.mjs'
 
 const v = (text) => parseVersion(text)
 
@@ -54,4 +60,24 @@ test('refuses a requested version that is not higher', () => {
 	assert.throws(() => chooseReleaseVersion('0.15.2', ['v0.15.2'], '0.15.2'), /not higher/)
 	assert.throws(() => chooseReleaseVersion('1.0.0', ['v0.15.7'], '0.16.0'), /lower than package\.json/)
 	assert.throws(() => chooseReleaseVersion('0.15.2', [], '1.0.0-beta.1'), /plain number/)
+})
+
+test('test builds sit between the installed store version and the next one', () => {
+	assert.deepEqual(chooseTestVersion('1.0.1', ['v1.0.0', 'v1.0.1', '1.0.1']), {
+		version: '1.0.2-test.1',
+		previous: '1.0.1',
+	})
+	const next = chooseTestVersion('1.0.1', ['v1.0.1', '1.0.2-test.1', '1.0.2-test.2 (test build)'])
+	assert.equal(next.version, '1.0.2-test.3')
+	assert.ok(compareVersions(v(next.version), v('1.0.1')) > 0)
+	assert.ok(compareVersions(v(next.version), v('1.0.2')) < 0)
+})
+
+test('test numbering restarts after each store version', () => {
+	assert.equal(chooseTestVersion('1.0.2', ['v1.0.1', '1.0.2-test.4', 'v1.0.2']).version, '1.0.3-test.1')
+})
+
+test('a test build never goes below something already published', () => {
+	assert.throws(() => chooseTestVersion('1.0.1', ['v1.0.2']), /not higher/)
+	assert.throws(() => chooseTestVersion('1.0.2-test.1', []), /plain number/)
 })

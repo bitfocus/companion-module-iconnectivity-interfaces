@@ -1,25 +1,20 @@
 name: Release
 
-# Builds the ready-to-import Companion module (.tgz) and publishes it as a
-# numbered GitHub release. Every change merged to main becomes the "Latest"
-# release, which the README's download link points to.
+# Runs in the Bitfocus copy, the module's only home, for every change to main.
 #
-# The version is chosen by scripts/set-release-version.mjs: package.json's own
-# version if it is higher than everything already published (a deliberate bump
-# such as 1.0.0), otherwise the next patch number above the highest published
-# version, so Companion never refuses the import. A run started by hand can ask for a specific,
-# higher version (for example 1.0.0). A hand-started run on any other branch
-# publishes a pre-release for testing that is not marked Latest.
+# - When package.json holds a store version with no GitHub release yet (for
+#   example a bump to 1.0.2), it tags v<version> if needed, builds that tagged
+#   code and publishes it as a release marked Latest. The tag is what the owner
+#   submits in the Bitfocus Developer Portal. Existing tags are never moved.
+# - Otherwise it publishes a test build numbered above the store version, for
+#   example 1.0.2-test.1 above 1.0.1, so Companion accepts the import. Its tag
+#   has no "v", so the Developer Portal does not offer it for submission, and
+#   the next store version (1.0.2) always sorts above it.
 on:
   push:
     branches:
       - main
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to publish (leave empty for the next number automatically)'
-        required: false
-        default: ''
 
 permissions:
   contents: write
@@ -32,16 +27,44 @@ concurrency:
 jobs:
   release:
     name: Build and publish release
-    # Test downloads are published only from the owner's working copy. The
-    # Bitfocus copy (bitfocus/companion-module-iconnectivity-interfaces) receives
-    # store versions, which Bitfocus builds from v-tags through its Developer
-    # Portal; publishing there would also restart the version numbering.
-    if: github.repository == 'mikecreates86/companion-module-iconnectivity-interfaces'
+    if: github.repository == 'bitfocus/companion-module-iconnectivity-interfaces'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Decide between a store version and a test build
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          manifest=$(node -p "require('./companion/manifest.json').version")
+          if ! echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::package.json version $version must be a plain store version such as 1.0.1."
+            exit 1
+          fi
+          if [ "$version" != "$manifest" ]; then
+            echo "::error::package.json ($version) and companion/manifest.json ($manifest) disagree. Nothing was published."
+            exit 1
+          fi
+          echo "store=$version" >> "$GITHUB_OUTPUT"
+          if gh release view "v$version" >/dev/null 2>&1; then
+            echo "kind=test" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "kind=store" >> "$GITHUB_OUTPUT"
+          if ! git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "v$version" -m "$version"
+            git push origin "refs/tags/v$version"
+          fi
+      - name: Check out the store version's tagged code
+        if: steps.plan.outputs.kind == 'store'
+        run: git checkout --detach "v${{ steps.plan.outputs.store }}"
       - name: Use Node.js from .node-version
         uses: actions/setup-node@v6
         with:
@@ -59,67 +82,69 @@ jobs:
             git ls-remote --tags origin | sed 's#.*refs/tags/##; s#\^{}$##'
           } > "$RUNNER_TEMP/published.txt"
           cat "$RUNNER_TEMP/published.txt"
-      - name: Choose the new version
+      - name: Choose the version
         id: version
         env:
-          REQUESTED: ${{ inputs.version }}
-        run: node scripts/set-release-version.mjs "$RUNNER_TEMP/published.txt" "$REQUESTED" >> "$GITHUB_OUTPUT"
+          KIND: ${{ steps.plan.outputs.kind }}
+          STORE: ${{ steps.plan.outputs.store }}
+        run: |
+          if [ "$KIND" = "test" ]; then
+            node scripts/set-release-version.mjs --test "$RUNNER_TEMP/published.txt" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$STORE" >> "$GITHUB_OUTPUT"
+            echo "previous=$(grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' "$RUNNER_TEMP/published.txt" | grep -vx "v$STORE" | sed 's/^v//' | sort -V | tail -1)" >> "$GITHUB_OUTPUT"
+          fi
       - name: Run tests
         run: yarn test
       - name: Run lint
         run: yarn lint
       - name: Package
-        run: yarn package ${{ github.ref_name != 'main' && '--prerelease' || '' }}
+        run: yarn package
       - name: Verify package
         run: yarn package:verify
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
+          KIND: ${{ steps.plan.outputs.kind }}
           VERSION: ${{ steps.version.outputs.version }}
           PREVIOUS: ${{ steps.version.outputs.previous }}
-          IS_MAIN: ${{ github.ref_name == 'main' }}
         run: |
-          tag="v${VERSION}"
           file="iconnectivity-interfaces-${VERSION}.tgz"
-          # Last guard: never reuse or overwrite an existing version.
-          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null || gh release view "$tag" >/dev/null 2>&1; then
-            echo "::error::Version ${VERSION} already exists. Nothing was published."
-            exit 1
+          if [ "$KIND" = "store" ]; then
+            tag="v${VERSION}"
+            title="${VERSION}"
+          else
+            tag="${VERSION}"
+            title="${VERSION} (test build)"
+            # Last guard: never reuse or overwrite an existing version.
+            if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null || gh release view "$tag" >/dev/null 2>&1; then
+              echo "::error::Version ${VERSION} already exists. Nothing was published."
+              exit 1
+            fi
           fi
           {
             cat WHATS_NEW.md
             echo
             echo "## How to install"
             echo
-            echo "1. Under **Assets** below, click **iconnectivity-interfaces-${VERSION}.tgz** to download it."
+            if [ "$KIND" = "store" ]; then
+              echo "This version is also available from Companion's module list once Bitfocus has published it."
+              echo
+            else
+              echo "_Test build. Use the version from Companion's module list unless you are helping test._"
+              echo
+            fi
+            echo "1. Under **Assets** below, click **${file}** to download it."
             echo "2. In Companion, open the **Modules** page and import that file."
             echo "3. Select version ${VERSION} on your iConnectivity connection."
             echo
-            if [ "$IS_MAIN" != "true" ]; then
-              echo "_Test version from \`${GITHUB_REF_NAME}\`. It is not the Latest release._"
-              echo
-            fi
-            echo "_Version ${VERSION}, up from ${PREVIOUS}. Built automatically from ${GITHUB_SHA::7}._"
+            echo "_Version ${VERSION}, up from ${PREVIOUS:-none}. Built automatically from $(git rev-parse --short HEAD)._"
           } > "$RUNNER_TEMP/notes.md"
-          if [ "$IS_MAIN" = "true" ]; then
-            flags=(--latest)
-          else
-            flags=(--prerelease --latest=false)
-          fi
-          gh release create "$tag" "$file" --target "$GITHUB_SHA" --title "$VERSION" --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}"
-      - name: Remove the old rolling test build
-        # Replaced by numbered releases; its only file is an older test version.
-        if: github.ref_name == 'main'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if gh release view test-build >/dev/null 2>&1; then
-            gh release delete test-build --cleanup-tag --yes
-          fi
+          gh release create "$tag" "$file" --target "$(git rev-parse HEAD)" --title "$title" --notes-file "$RUNNER_TEMP/notes.md" --latest
       - name: Summary
         run: |
           {
             echo "### Version \`${{ steps.version.outputs.version }}\` is ready, up from \`${{ steps.version.outputs.previous }}\`"
             echo
-            echo "Download it from the [release page](${{ github.server_url }}/${{ github.repository }}/releases/tag/v${{ steps.version.outputs.version }})."
+            echo "Download it from the [releases page](${{ github.server_url }}/${{ github.repository }}/releases)."
           } >> "$GITHUB_STEP_SUMMARY"
