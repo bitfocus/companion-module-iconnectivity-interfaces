@@ -14,6 +14,8 @@
 
 ## Recently Completed
 
+- Bitfocus review of 1.0.0 (2026-11-10, https://github.com/digitaldrummerj/companion-module-review/blob/main/reviews/iconnectivity-interfaces/review-iconnectivity-interfaces-v1.0.0-20261110-155540.md): Changes Required. The five blocking items (C1 .gitignore, C2 .prettierignore, H1 template package/build/lint scripts with the package now written to the project root, H2 package name, H3 README install path) are fixed in **1.0.1** (2026-11-12) with no `src/` change; 99 tests, lint, Prettier, package and package verification passed. Tagged `v1.0.1` automatically on the Bitfocus copy for resubmission. Non-blocking findings M1–M3 and L1–L7 are recorded under Known Issues for a later hardware-tested build.
+
 - First store version (2026-11-10): the owner reported running 0.15.3 in live use with no issues and approved publishing it as **1.0.0**. Module code (`src/`, `companion/`) is unchanged from 0.15.3; only records, build tooling and Dependabot dependency updates differ. `package.json` and the manifest set to 1.0.0, tagged `v1.0.0` on `bitfocus/companion-module-iconnectivity-interfaces` for submission in the Developer Portal. The owner's copy still needs this commit and the four Dependabot merges copied back.
 
 - Bitfocus repository (2026-10-25): Bitfocus approved the request and created `bitfocus/companion-module-iconnectivity-interfaces`, empty (no template). Plan: the owner's working copy `mikecreates86/companion-module-iconnectivity-interfaces` stays the development home and the test-download page; `main` is copied to the Bitfocus repository, and store versions are tagged there (`v1.0.0` first, after the owner approves 0.15.2 for live use) and submitted in the Developer Portal. The release workflow now runs only in the owner's copy.
@@ -95,6 +97,8 @@ On 2026-10-05, Candidate 0.14.14 on PlayAUDIO1U supported simultaneous Ethernet 
 - Added concise configuration tooltips, simplified user-facing labels, and a direct Preset Selector link.
 
 ## Known Issues
+
+- Open from the Bitfocus 1.0.0 review (non-blocking; change module behaviour, so they need a hardware-tested build): M1 saving settings with a fixed local RTP port fails with EADDRINUSE because old sockets close after the new bind; M2 preset name variable stale after Recall preset on the configuration-port/responder paths; M3 legacy snapshot/scene Type uses numeric ids; L1 repeated log lines every 3 s when live-notification registration fails; L2 every RTP packet republishes all variables; L3 Scene 1/2 translation applied to legacy PlayAUDIO12; L4 top-level `@julusian/midi` import stops the module on Linux without ALSA; L5 USB never reads current preset/Scene; L6 upgrade resets a custom configuration port to 5002; L7 `as never` casts on action/feedback definitions.
 
 - PA1U active Scene startup was falsely inferred from an audio-clock setting through 0.14.21. Corrected SceneNumber reads in 0.14.22 are now user-confirmed by the supplied restart regression test. Earlier qualification based on the audio-clock mapping remains withdrawn.
 

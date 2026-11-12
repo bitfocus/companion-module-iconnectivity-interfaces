@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.1 (2026-11-12)
+
+Changes requested in the Bitfocus review of 1.0.0. No change to how the module works with your equipment.
+
+- Project setup now matches the Bitfocus module template (ignore files, build and package commands, package name `iconnectivity-interfaces`).
+- The README points to Companion's module list as the way to install; GitHub test builds are listed as optional.
+
 ## 1.0.0 (2026-11-10)
 
 First release through the Bitfocus module store. The module code is the same as 0.15.3 (and Candidate 0.15.2), which the owner has run in live use without issues.

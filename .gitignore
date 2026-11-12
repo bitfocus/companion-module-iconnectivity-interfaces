@@ -1,7 +1,7 @@
 # Dependencies and package-manager caches
-/node_modules/
-/.yarn/
+node_modules/
 package-lock.json
+/.yarn
 /.npmrc
 
 # Local environment, credentials and certificates
@@ -14,8 +14,8 @@ package-lock.json
 *.pfx
 
 # Generated builds, packages and reports
-/dist/
-/pkg/
+/dist
+/pkg
 /releases/*
 !/releases/README.md
 /*.tgz
@@ -39,7 +39,7 @@ DEBUG-*
 *~
 
 # Editor and operating-system files
-/.vscode/
+/.vscode
 /.idea/
 .DS_Store
 Thumbs.db

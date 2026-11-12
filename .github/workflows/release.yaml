@@ -80,7 +80,7 @@ jobs:
           IS_MAIN: ${{ github.ref_name == 'main' }}
         run: |
           tag="v${VERSION}"
-          file="pkg/iconnectivity-interfaces-${VERSION}.tgz"
+          file="iconnectivity-interfaces-${VERSION}.tgz"
           # Last guard: never reuse or overwrite an existing version.
           if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null || gh release view "$tag" >/dev/null 2>&1; then
             echo "::error::Version ${VERSION} already exists. Nothing was published."

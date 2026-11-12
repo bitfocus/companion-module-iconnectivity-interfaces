@@ -2,11 +2,13 @@
 
 [Bitfocus Companion](https://bitfocus.io/companion) module for iConnectivity PlayAUDIO and mio audio/MIDI interfaces.
 
-## ⬇️ Download the latest version
+## Installing
 
-**[Get the latest version here](https://github.com/mikecreates86/companion-module-iconnectivity-interfaces/releases/latest)**: open the link, and under **Assets** click the file ending in **`.tgz`**. Then, in Companion, go to the **Modules** page and import that file.
+In Companion 4.3 or later, add a connection and search for **iConnectivity**. Companion installs the module from its module list.
 
-It always holds the newest work, with a higher version number every time, so Companion will accept it. Each release says which version is trusted for live use (also recorded in `STATUS.md`).
+### Test builds (optional)
+
+Newer builds that are still being tested are published on the **[test builds page](https://github.com/mikecreates86/companion-module-iconnectivity-interfaces/releases/latest)**: open the link, and under **Assets** click the file ending in **`.tgz`**. Then, in Companion, go to the **Modules** page and import that file. Each test build has a higher version number than the one before, so Companion will accept it, and says which version is trusted for live use (also recorded in `STATUS.md`). Use the module list version unless you are helping test.
 
 ## What it does
 
@@ -42,7 +44,7 @@ Requires Node 22.20+ and Yarn 4 via Corepack.
 corepack yarn install
 corepack yarn test      # build and run all tests (needs loopback UDP)
 corepack yarn lint
-corepack yarn package   # build an importable .tgz in pkg/
+corepack yarn package   # build an importable .tgz in the project folder
 ```
 
 - `src/`: module source. `src/network/` is the AppleMIDI/RTP-MIDI transport; `src/protocol/` holds the iConnectivity legacy and TNG SysEx codecs.

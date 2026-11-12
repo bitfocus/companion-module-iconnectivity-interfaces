@@ -5,7 +5,7 @@ import { promisify } from 'node:util'
 const run = promisify(execFile)
 const sourcePackage = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
 const manifest = JSON.parse(await readFile(new URL('../companion/manifest.json', import.meta.url), 'utf8'))
-const output = new URL(`../pkg/${manifest.id}-${sourcePackage.version}.tgz`, import.meta.url)
+const output = new URL(`../${manifest.id}-${sourcePackage.version}.tgz`, import.meta.url)
 
 if (sourcePackage.version !== manifest.version)
 	throw new Error(
