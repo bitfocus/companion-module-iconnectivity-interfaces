@@ -1,88 +1,85 @@
 name: Release
 
-# Runs in the Bitfocus copy, the module's only home, for every change to main.
+# Publishes the ready-to-import downloads. It runs only in the owner's copy,
+# mikecreates86/companion-module-iconnectivity-interfaces, which is now just
+# the download page: it builds the code from the Bitfocus copy (the module's
+# only home) every hour, so nothing has to be copied between them by hand.
+# This file is kept in the Bitfocus copy as the source; copy it to the owner's
+# copy whenever it changes.
 #
-# - When package.json holds a store version with no GitHub release yet (for
-#   example a bump to 1.0.2), it tags v<version> if needed, builds that tagged
-#   code and publishes it as a release marked Latest. The tag is what the owner
-#   submits in the Bitfocus Developer Portal. Existing tags are never moved.
-# - Otherwise it publishes a test build numbered above the store version, for
-#   example 1.0.2-test.1 above 1.0.1, so Companion accepts the import. Its tag
-#   has no "v", so the Developer Portal does not offer it for submission, and
-#   the next store version (1.0.2) always sorts above it.
+# - A store version tagged vX.Y.Z in the Bitfocus copy with no release here yet
+#   is built from that tag and released as X.Y.Z.
+# - Otherwise, when the Bitfocus main has changed since the last download, it is
+#   released as a test build numbered above the store version (for example
+#   1.0.2-test.1 above 1.0.1), so Companion accepts the import and the next
+#   store version (1.0.2) sorts above it.
+# The newest download is marked Latest.
 on:
-  push:
-    branches:
-      - main
+  schedule:
+    - cron: '17 * * * *'
   workflow_dispatch:
 
 permissions:
   contents: write
 
-# One release at a time across the whole repository, so two runs can never pick the same number.
+# One release at a time, so two runs can never pick the same number.
 concurrency:
   group: release
   cancel-in-progress: false
 
+env:
+  SOURCE: bitfocus/companion-module-iconnectivity-interfaces
+
 jobs:
   release:
-    name: Build and publish release
-    if: github.repository == 'bitfocus/companion-module-iconnectivity-interfaces'
+    name: Build and publish download
+    if: github.repository == 'mikecreates86/companion-module-iconnectivity-interfaces'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v7
+      - name: Check out the Bitfocus copy
+        uses: actions/checkout@v7
         with:
+          repository: ${{ env.SOURCE }}
+          ref: main
           fetch-depth: 0
-      - name: Decide between a store version and a test build
+      - name: Decide what to publish
         id: plan
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           version=$(node -p "require('./package.json').version")
           manifest=$(node -p "require('./companion/manifest.json').version")
-          if ! echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "::error::package.json version $version must be a plain store version such as 1.0.1."
-            exit 1
-          fi
-          if [ "$version" != "$manifest" ]; then
-            echo "::error::package.json ($version) and companion/manifest.json ($manifest) disagree. Nothing was published."
+          if ! echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || [ "$version" != "$manifest" ]; then
+            echo "::error::Bitfocus main has package.json $version and manifest $manifest; they must be the same plain version. Nothing was published."
             exit 1
           fi
           echo "store=$version" >> "$GITHUB_OUTPUT"
-          if gh release view "v$version" >/dev/null 2>&1; then
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --jq '.[] | .tag_name, .name, (.body // ""), (.assets[].name)' > "$RUNNER_TEMP/published.txt"
+          git tag -l >> "$RUNNER_TEMP/published.txt"
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null && ! gh release view "v$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            git checkout --detach "v$version"
+            echo "kind=store" >> "$GITHUB_OUTPUT"
+          elif grep -q "Built from ${SOURCE}@$(git rev-parse --short=7 HEAD)" "$RUNNER_TEMP/published.txt"; then
+            echo "Bitfocus main $(git rev-parse --short=7 HEAD) is already published; nothing to do."
+            echo "kind=none" >> "$GITHUB_OUTPUT"
+          else
             echo "kind=test" >> "$GITHUB_OUTPUT"
-            exit 0
           fi
-          echo "kind=store" >> "$GITHUB_OUTPUT"
-          if ! git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git tag -a "v$version" -m "$version"
-            git push origin "refs/tags/v$version"
-          fi
-      - name: Check out the store version's tagged code
-        if: steps.plan.outputs.kind == 'store'
-        run: git checkout --detach "v${{ steps.plan.outputs.store }}"
       - name: Use Node.js from .node-version
+        if: steps.plan.outputs.kind != 'none'
         uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
       - name: Prepare Environment
+        if: steps.plan.outputs.kind != 'none'
         run: corepack enable
       - name: Install dependencies
+        if: steps.plan.outputs.kind != 'none'
         run: yarn install --immutable
-      - name: List versions already published
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          {
-            gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --jq '.[] | .tag_name, .name, (.assets[].name)'
-            git ls-remote --tags origin | sed 's#.*refs/tags/##; s#\^{}$##'
-          } > "$RUNNER_TEMP/published.txt"
-          cat "$RUNNER_TEMP/published.txt"
       - name: Choose the version
+        if: steps.plan.outputs.kind != 'none'
         id: version
         env:
           KIND: ${{ steps.plan.outputs.kind }}
@@ -92,17 +89,22 @@ jobs:
             node scripts/set-release-version.mjs --test "$RUNNER_TEMP/published.txt" >> "$GITHUB_OUTPUT"
           else
             echo "version=$STORE" >> "$GITHUB_OUTPUT"
-            echo "previous=$(grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' "$RUNNER_TEMP/published.txt" | grep -vx "v$STORE" | sed 's/^v//' | sort -V | tail -1)" >> "$GITHUB_OUTPUT"
+            echo "previous=$(grep -oE '^v?[0-9]+\.[0-9]+\.[0-9]+(-test\.[0-9]+)?$' "$RUNNER_TEMP/published.txt" | sed 's/^v//' | grep -vx "$STORE" | sort -V | tail -1)" >> "$GITHUB_OUTPUT"
           fi
       - name: Run tests
+        if: steps.plan.outputs.kind != 'none'
         run: yarn test
       - name: Run lint
+        if: steps.plan.outputs.kind != 'none'
         run: yarn lint
       - name: Package
+        if: steps.plan.outputs.kind != 'none'
         run: yarn package
       - name: Verify package
+        if: steps.plan.outputs.kind != 'none'
         run: yarn package:verify
       - name: Publish release
+        if: steps.plan.outputs.kind != 'none'
         env:
           GH_TOKEN: ${{ github.token }}
           KIND: ${{ steps.plan.outputs.kind }}
@@ -110,17 +112,18 @@ jobs:
           PREVIOUS: ${{ steps.version.outputs.previous }}
         run: |
           file="iconnectivity-interfaces-${VERSION}.tgz"
+          short=$(git rev-parse --short=7 HEAD)
           if [ "$KIND" = "store" ]; then
             tag="v${VERSION}"
             title="${VERSION}"
           else
             tag="${VERSION}"
             title="${VERSION} (test build)"
-            # Last guard: never reuse or overwrite an existing version.
-            if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null || gh release view "$tag" >/dev/null 2>&1; then
-              echo "::error::Version ${VERSION} already exists. Nothing was published."
-              exit 1
-            fi
+          fi
+          # Last guard: never reuse or overwrite an existing version.
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Version ${VERSION} already exists. Nothing was published."
+            exit 1
           fi
           {
             cat WHATS_NEW.md
@@ -128,23 +131,20 @@ jobs:
             echo "## How to install"
             echo
             if [ "$KIND" = "store" ]; then
-              echo "This version is also available from Companion's module list once Bitfocus has published it."
-              echo
+              echo "This version is also in Companion's module list once Bitfocus has published it."
             else
               echo "_Test build. Use the version from Companion's module list unless you are helping test._"
-              echo
             fi
+            echo
             echo "1. Under **Assets** below, click **${file}** to download it."
             echo "2. In Companion, open the **Modules** page and import that file."
             echo "3. Select version ${VERSION} on your iConnectivity connection."
             echo
-            echo "_Version ${VERSION}, up from ${PREVIOUS:-none}. Built automatically from $(git rev-parse --short HEAD)._"
+            echo "_Version ${VERSION}, up from ${PREVIOUS:-none}. Built from ${SOURCE}@${short}._"
           } > "$RUNNER_TEMP/notes.md"
-          gh release create "$tag" "$file" --target "$(git rev-parse HEAD)" --title "$title" --notes-file "$RUNNER_TEMP/notes.md" --latest
-      - name: Summary
-        run: |
+          gh release create "$tag" "$file" --repo "$GITHUB_REPOSITORY" --target main --title "$title" --notes-file "$RUNNER_TEMP/notes.md" --latest
           {
-            echo "### Version \`${{ steps.version.outputs.version }}\` is ready, up from \`${{ steps.version.outputs.previous }}\`"
+            echo "### Version \`${VERSION}\` is ready, up from \`${PREVIOUS:-none}\`"
             echo
-            echo "Download it from the [releases page](${{ github.server_url }}/${{ github.repository }}/releases)."
+            echo "Download it from the [release page](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${tag})."
           } >> "$GITHUB_STEP_SUMMARY"
