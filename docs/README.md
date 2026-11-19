@@ -9,6 +9,6 @@
 - `SOURCES.md`: authoritative iConnectivity and Bitfocus references.
 - `BITFOCUS_REPOSITORY_REQUEST.md`: draft Bitfocus Developer Portal repository request and pre-submission checks.
 
-Root handoff state belongs in `README_AI.md` and `STATUS.md`; do not duplicate it here.
+Root instructions and handoff state belong in `AGENTS.md`, `HANDOFF.md` and `STATUS.md`; do not duplicate them here.
 
 - `STABILITY_CHECKLIST.md`: final PA1U/mioXM Ethernet checks, recovery/endurance acceptance criteria and Production promotion boundary.

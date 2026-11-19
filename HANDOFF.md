@@ -2,6 +2,33 @@
 
 Each entry: date, tool, what changed, what is half-finished, what to do next, decisions made.
 
+## 2026-11-19 (later) · Claude Code
+
+**What changed**
+
+- The owner answered the open questions from the first entry:
+  - 1.0.1 is approved and published in Companion's module list.
+  - 1.0.1 is the version trusted for live use.
+  - Codex and Claude keep separate branches (`codex/...`, `claude/...`).
+  - The older notes `PROJECT_CONTEXT.md` and `README_AI.md` are retired. Their content is in git history if ever needed.
+  - Other connections probably kept their settings in the Companion 5.1 update.
+- `AGENTS.md` and `STATUS.md` were updated to match: Production 1.0.1, Candidate none.
+
+**Half-finished**
+
+- The review findings M1–M3 and L1–L7 are still open.
+- The Companion 5.1 settings loss is unexplained. It seems specific to this module (likely the manually imported version), but this is not confirmed.
+
+**Next**
+
+1. Fix M1, M2 and L6 as a test build for the owner to run on a Sunday. Then submit 1.0.2 when he approves.
+2. At the next Companion update, ask the owner whether this module kept its settings.
+
+**Decisions**
+
+- Production is 1.0.1.
+- `AGENTS.md`, `HANDOFF.md` and `STATUS.md` are the only handoff records.
+
 ## 2026-11-19 · Claude Code
 
 **What changed**
