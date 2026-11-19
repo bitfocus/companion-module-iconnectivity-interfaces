@@ -63,7 +63,7 @@ One test file: `yarn build && node --test tests/<name>.test.mjs`. To run it for 
 - Keep protocol encoding and decoding pure and covered by tests. A protocol change needs a test or a cleaned-up sample message in `tests/fixtures/`.
 - Trust what the device reports it can do; never assume from the model name alone. Unsupported controls are hidden or fail with a clear message.
 - Commit messages: short imperative summary with a type prefix (`fix:`, `ci:`, `docs:`, `test:`, `build:`).
-- Branches: TODO. The owner should confirm the naming per tool: older work used `codex/...` for Codex and `claude/...` for Claude.
+- Branches: Codex works on `codex/...` branches and Claude on `claude/...` branches, so it is always clear which tool did what (owner decision, 2026-11-19).
 
 ## Decisions already made (and why)
 
@@ -89,12 +89,11 @@ One test file: `yarn build && node --test tests/<name>.test.mjs`. To run it for 
 **Released:**
 
 - 1.0.0 (2026-11-10) was submitted to the Bitfocus store. The review asked for 5 template changes and no code fixes.
-- 1.0.1 (2026-11-12) contains those changes and was submitted by the owner.
-- The 1.0.1 review result is TODO: the owner should check the Developer Portal.
+- 1.0.1 (2026-11-12) contains those changes. Bitfocus approved and **published** it, so it is in Companion's module list (owner, 2026-11-19).
 - The download page published 1.0.1 as Latest on 2026-11-18.
 - 1.0.x has the same module code as 0.15.3, which the owner ran in live use without issues.
 
-**Trusted for live use:** TODO. Records disagree: `WHATS_NEW.md` says 1.0.1, but `STATUS.md` still lists Production 0.14.22 and Candidate 0.15.2. The owner should confirm.
+**Trusted for live use (Production):** 1.0.1, confirmed by the owner on 2026-11-19. Candidate: none.
 
 **Working:**
 
@@ -127,11 +126,10 @@ One test file: `yarn build && node --test tests/<name>.test.mjs`. To run it for 
 - L6: a settings upgrade can reset a custom configuration port to 5002.
 - L7: `as never` casts on the action and feedback definitions.
 
-**Open question:** after updating Companion 5.0.7 → 5.1.0, the owner lost the module's IP address and settings. The cause is unconfirmed; the module never saves settings itself. TODO: did other connections keep their settings?
+**Open question:** after updating Companion 5.0.7 → 5.1.0, the owner lost this module's IP address and settings, while other connections probably kept theirs (owner's recollection). The module never saves settings itself. Likely related to how Companion carried over a manually imported module version; not confirmed. Watch the next Companion update now that the module comes from the module list.
 
 **Other records:**
 
 - `STATUS.md` has the detailed history.
 - `docs/` has protocol notes (`PROTOCOL_NOTES.md`), the capability matrix and the stability checklist.
 - `releases/README.md` has the release history.
-- `PROJECT_CONTEXT.md` and `README_AI.md` are older context notes. TODO: owner decides whether to keep or retire them now that this file exists.
